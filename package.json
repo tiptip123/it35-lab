@@ -1,9 +1,12 @@
 {
-  "name": "IT35-lab",
+  "name": "it35-lab",
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "homepage": "https://tiptip123.github.io/it35-lab",
   "scripts": {
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
@@ -40,6 +43,7 @@
     "cypress": "^13.5.0",
     "eslint": "^8.35.0",
     "eslint-plugin-react": "^7.32.2",
+    "gh-pages": "^6.3.0",
     "jsdom": "^22.1.0",
     "terser": "^5.4.0",
     "typescript": "^5.1.6",
