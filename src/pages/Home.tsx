@@ -16,7 +16,7 @@ import {
             <IonButtons slot='start'>
               <IonMenuButton></IonMenuButton>
             </IonButtons>
-            <IonTitle>Page1</IonTitle>
+            <IonTitle>Home</IonTitle>
           </IonToolbar>
         </IonHeader>
         <IonContent fullscreen>
