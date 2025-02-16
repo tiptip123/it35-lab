@@ -7,6 +7,7 @@ import {
       IonTitle, 
       IonToolbar 
   } from '@ionic/react';
+  
   const Feed: React.FC = () => {
     return (
       <IonPage>
@@ -16,21 +17,22 @@ import {
               <IonMenuButton></IonMenuButton>
             </IonButtons>
             <IonTitle>Feed</IonTitle>
-            <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-          }}
-        >
-          Feed
-        </div>
           </IonToolbar>
         </IonHeader>
         <IonContent fullscreen>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+            }}
+          >
+            Feed
+          </div>
         </IonContent>
       </IonPage>
     );
   };
+  
   export default Feed;
