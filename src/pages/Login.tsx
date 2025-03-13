@@ -18,11 +18,14 @@ const Login: React.FC = () => {
   const navigation = useIonRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(''); // New state for email
+  const [confirmPassword, setConfirmPassword] = useState(''); // New state for confirm password
   const [showLoading, setShowLoading] = useState(false);
   const [showErrorToast, setShowErrorToast] = useState(false);
   const [showRegistrationLoading, setShowRegistrationLoading] = useState(false);
   const [showRegistrationSuccessToast, setShowRegistrationSuccessToast] = useState(false);
-  const [registeredUsers, setRegisteredUsers] = useState<{ username: string; password: string }[]>([]); // Store registered users
+  const [registeredUsers, setRegisteredUsers] = useState<{ username: string; password: string; email: string }[]>([]); // Store registered users
+  const [showRegistrationForm, setShowRegistrationForm] = useState(false); // Track whether to show the registration form
 
   const doLogin = () => {
     setShowLoading(true); // Show loading indicator
@@ -43,23 +46,32 @@ const Login: React.FC = () => {
   };
 
   const doRegister = () => {
+    // Validate password and confirm password match
+    if (password !== confirmPassword) {
+      setShowErrorToast(true);
+      setShowRegistrationLoading(false);
+      return;
+    }
+
     setShowRegistrationLoading(true); // Show loading indicator
 
     // Simulate registration process
     setTimeout(() => {
-      // Check if the username is already taken
+      // Check if the username or email is already taken
       const isUsernameTaken = registeredUsers.some((user) => user.username === username);
+      const isEmailTaken = registeredUsers.some((user) => user.email === email);
 
-      if (isUsernameTaken) {
-        setShowErrorToast(true); // Show error toast if username is taken
+      if (isUsernameTaken || isEmailTaken) {
+        setShowErrorToast(true); // Show error toast if username or email is taken
         setShowRegistrationLoading(false);
         return;
       }
 
       // Add the new user to the registered users list
-      setRegisteredUsers([...registeredUsers, { username, password }]);
+      setRegisteredUsers([...registeredUsers, { username, password, email }]);
       setShowRegistrationLoading(false);
       setShowRegistrationSuccessToast(true); // Show success toast
+      setShowRegistrationForm(false); // Hide the registration form after successful registration
     }, 2000); // Simulate a 2-second delay for registration
   };
 
@@ -67,41 +79,93 @@ const Login: React.FC = () => {
     <IonPage>
       <IonHeader>
         <IonToolbar>
-          <IonTitle>Login</IonTitle>
+          <IonTitle>{showRegistrationForm ? 'Register' : 'Login'}</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
-        {/* Username Input */}
-        <IonItem>
-          <IonLabel position="floating">Username</IonLabel>
-          <IonInput
-            type="text"
-            value={username}
-            onIonChange={(e) => setUsername(e.detail.value!)}
-            placeholder="Enter your username"
-          />
-        </IonItem>
+        {showRegistrationForm ? (
+          // Registration Form
+          <>
+            <IonItem>
+              <IonLabel position="floating">Username</IonLabel>
+              <IonInput
+                type="text"
+                value={username}
+                onIonChange={(e) => setUsername(e.detail.value!)}
+                placeholder="Enter your username"
+              />
+            </IonItem>
 
-        {/* Password Input */}
-        <IonItem>
-          <IonLabel position="floating">Password</IonLabel>
-          <IonInput
-            type="password"
-            value={password}
-            onIonChange={(e) => setPassword(e.detail.value!)}
-            placeholder="Enter your password"
-          />
-        </IonItem>
+            <IonItem>
+              <IonLabel position="floating">Email</IonLabel>
+              <IonInput
+                type="email"
+                value={email}
+                onIonChange={(e) => setEmail(e.detail.value!)}
+                placeholder="Enter your email"
+              />
+            </IonItem>
 
-        {/* Login Button */}
-        <IonButton onClick={doLogin} expand="full" className="ion-margin-top">
-          Login
-        </IonButton>
+            <IonItem>
+              <IonLabel position="floating">Password</IonLabel>
+              <IonInput
+                type="password"
+                value={password}
+                onIonChange={(e) => setPassword(e.detail.value!)}
+                placeholder="Enter your password"
+              />
+            </IonItem>
 
-        {/* Registration Button */}
-        <IonButton onClick={doRegister} expand="full" className="ion-margin-top" color="secondary">
-          Register
-        </IonButton>
+            <IonItem>
+              <IonLabel position="floating">Confirm Password</IonLabel>
+              <IonInput
+                type="password"
+                value={confirmPassword}
+                onIonChange={(e) => setConfirmPassword(e.detail.value!)}
+                placeholder="Confirm your password"
+              />
+            </IonItem>
+
+            <IonButton onClick={doRegister} expand="full" className="ion-margin-top" color="secondary">
+              Register
+            </IonButton>
+
+            <IonButton onClick={() => setShowRegistrationForm(false)} expand="full" className="ion-margin-top" color="medium">
+              Back to Login
+            </IonButton>
+          </>
+        ) : (
+          // Login Form
+          <>
+            <IonItem>
+              <IonLabel position="floating">Username</IonLabel>
+              <IonInput
+                type="text"
+                value={username}
+                onIonChange={(e) => setUsername(e.detail.value!)}
+                placeholder="Enter your username"
+              />
+            </IonItem>
+
+            <IonItem>
+              <IonLabel position="floating">Password</IonLabel>
+              <IonInput
+                type="password"
+                value={password}
+                onIonChange={(e) => setPassword(e.detail.value!)}
+                placeholder="Enter your password"
+              />
+            </IonItem>
+
+            <IonButton onClick={doLogin} expand="full" className="ion-margin-top">
+              Login
+            </IonButton>
+
+            <IonButton onClick={() => setShowRegistrationForm(true)} expand="full" className="ion-margin-top" color="secondary">
+              Register
+            </IonButton>
+          </>
+        )}
 
         {/* Login Loading Indicator */}
         <IonLoading
@@ -123,7 +187,13 @@ const Login: React.FC = () => {
         <IonToast
           isOpen={showErrorToast}
           onDidDismiss={() => setShowErrorToast(false)}
-          message={username ? "Username already taken or invalid credentials!" : "Invalid username or password!"}
+          message={
+            password !== confirmPassword
+              ? "Passwords do not match!"
+              : username || email
+              ? "Username or email already taken!"
+              : "Invalid username or password!"
+          }
           duration={3000}
           color="danger"
         />
