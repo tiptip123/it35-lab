@@ -2,7 +2,6 @@ import { Redirect, Route } from 'react-router-dom';
 import { IonApp, IonRouterOutlet, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import Login from './pages/Login';
-import Registration from './pages/Registration'; // Import the new Registration component
 import Menu from './pages/Menu';
 
 /* Core CSS required for Ionic components to work properly */
@@ -41,19 +40,8 @@ const App: React.FC = () => (
   <IonApp>
     <IonReactRouter>
       <IonRouterOutlet>
-        {/* Default route redirects to the login page */}
-        <Route exact path="/it35-lab">
-          <Redirect to="/it35-lab/login" />
-        </Route>
-
-        {/* Login page */}
-        <Route exact path="/it35-lab/login" component={Login} />
-
-        {/* Registration page */}
-        <Route path="/it35-lab/registration" component={Registration} />
-
-        {/* Main app menu */}
-        <Route path="/it35-lab/app" component={Menu} />
+      <Route exact path="/it35-lab" component={Login} />
+      <Route  path="/it35-lab/app" component={Menu} />
       </IonRouterOutlet>
     </IonReactRouter>
   </IonApp>
