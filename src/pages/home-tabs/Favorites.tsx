@@ -33,9 +33,9 @@ const Favorites: React.FC = () => {
     },
     {
       id: 3,
-      title: 'Frisbee Team',
+      title: 'Pilipinas Ultimate',
       description: 'A team celebrating after a frisbee match.',
-      image: 'https://scontent.fmnl14-1.fna.fbcdn.net/v/t39.30808-6/475306403_122125121852594882_1702794426792714697_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=127cfc&_nc_eui2=AeHq3n4BPdTnn1NEV5EZ6VvE3bhjmiwdbDfduGOaLB1sNyOX6A1_njmzGQBaPtxdZIkguL12NhL7eTRzbKC7Xni7&_nc_ohc=GZ7Tn_IA7lAQ7kNvgHQG7_H&_nc_zt=23&_nc_ht=scontent.fmnl14-1.fna&_nc_gid=A3r39QqtzlvmQcXAodpH1Sm&oh=00_AYA-6Cf8oeW801Uz5nKDtEKJciwBonBKNydObZijPFt0Pg&oe=67C5A297'
+      image: 'https://sa.kapamilya.com/absnews/abscbnnews/media/2023/life/09/11/philippine-ultimate-national-team.jpg'
     }
   ];
 
