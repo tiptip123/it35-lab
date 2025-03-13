@@ -22,24 +22,42 @@ const Login: React.FC = () => {
   const [showErrorToast, setShowErrorToast] = useState(false);
   const [showRegistrationLoading, setShowRegistrationLoading] = useState(false);
   const [showRegistrationSuccessToast, setShowRegistrationSuccessToast] = useState(false);
+  const [registeredUsers, setRegisteredUsers] = useState<{ username: string; password: string }[]>([]); // Store registered users
 
   const doLogin = () => {
+    setShowLoading(true); // Show loading indicator
+
     // Simulate login validation
-    if (username === 'admin' && password === 'password') {
-      setShowLoading(true); // Show loading indicator
-      setTimeout(() => {
-        setShowLoading(false);
+    setTimeout(() => {
+      const user = registeredUsers.find(
+        (user) => user.username === username && user.password === password
+      );
+
+      if (user) {
         navigation.push('/it35-lab/app', 'forward', 'replace'); // Navigate to the app
-      }, 2000); // Simulate a 2-second delay for login
-    } else {
-      setShowErrorToast(true); // Show error toast for invalid credentials
-    }
+      } else {
+        setShowErrorToast(true); // Show error toast for invalid credentials
+      }
+      setShowLoading(false);
+    }, 2000); // Simulate a 2-second delay for login
   };
 
   const doRegister = () => {
-    // Simulate registration process
     setShowRegistrationLoading(true); // Show loading indicator
+
+    // Simulate registration process
     setTimeout(() => {
+      // Check if the username is already taken
+      const isUsernameTaken = registeredUsers.some((user) => user.username === username);
+
+      if (isUsernameTaken) {
+        setShowErrorToast(true); // Show error toast if username is taken
+        setShowRegistrationLoading(false);
+        return;
+      }
+
+      // Add the new user to the registered users list
+      setRegisteredUsers([...registeredUsers, { username, password }]);
       setShowRegistrationLoading(false);
       setShowRegistrationSuccessToast(true); // Show success toast
     }, 2000); // Simulate a 2-second delay for registration
@@ -105,7 +123,7 @@ const Login: React.FC = () => {
         <IonToast
           isOpen={showErrorToast}
           onDidDismiss={() => setShowErrorToast(false)}
-          message="Invalid username or password!"
+          message={username ? "Username already taken or invalid credentials!" : "Invalid username or password!"}
           duration={3000}
           color="danger"
         />
@@ -114,7 +132,7 @@ const Login: React.FC = () => {
         <IonToast
           isOpen={showRegistrationSuccessToast}
           onDidDismiss={() => setShowRegistrationSuccessToast(false)}
-          message="Registration successful!"
+          message="Registration successful! You can now log in."
           duration={3000}
           color="success"
         />
