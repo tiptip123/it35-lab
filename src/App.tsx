@@ -50,7 +50,7 @@ const App: React.FC = () => (
         <Route exact path="/it35-lab/login" component={Login} />
 
         {/* Registration page */}
-        <Route exact path="/it35-lab/registration" component={Registration} />
+        <Route path="/it35-lab/registration" component={Registration} />
 
         {/* Main app menu */}
         <Route path="/it35-lab/app" component={Menu} />

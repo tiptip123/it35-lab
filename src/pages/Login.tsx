@@ -20,6 +20,8 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showLoading, setShowLoading] = useState(false);
   const [showErrorToast, setShowErrorToast] = useState(false);
+  const [showRegistrationLoading, setShowRegistrationLoading] = useState(false);
+  const [showRegistrationSuccessToast, setShowRegistrationSuccessToast] = useState(false);
 
   const doLogin = () => {
     // Simulate login validation
@@ -32,6 +34,15 @@ const Login: React.FC = () => {
     } else {
       setShowErrorToast(true); // Show error toast for invalid credentials
     }
+  };
+
+  const doRegister = () => {
+    // Simulate registration process
+    setShowRegistrationLoading(true); // Show loading indicator
+    setTimeout(() => {
+      setShowRegistrationLoading(false);
+      setShowRegistrationSuccessToast(true); // Show success toast
+    }, 2000); // Simulate a 2-second delay for registration
   };
 
   return (
@@ -70,21 +81,24 @@ const Login: React.FC = () => {
         </IonButton>
 
         {/* Registration Button */}
-        <IonButton
-          onClick={() => navigation.push('/registration', 'forward', 'replace')}
-          expand="full"
-          className="ion-margin-top"
-          color="secondary"
-        >
+        <IonButton onClick={doRegister} expand="full" className="ion-margin-top" color="secondary">
           Register
         </IonButton>
 
-        {/* Loading Indicator */}
+        {/* Login Loading Indicator */}
         <IonLoading
           isOpen={showLoading}
           message={'Logging in...'}
           duration={2000}
           onDidDismiss={() => setShowLoading(false)}
+        />
+
+        {/* Registration Loading Indicator */}
+        <IonLoading
+          isOpen={showRegistrationLoading}
+          message={'Registering...'}
+          duration={2000}
+          onDidDismiss={() => setShowRegistrationLoading(false)}
         />
 
         {/* Error Toast */}
@@ -94,6 +108,15 @@ const Login: React.FC = () => {
           message="Invalid username or password!"
           duration={3000}
           color="danger"
+        />
+
+        {/* Registration Success Toast */}
+        <IonToast
+          isOpen={showRegistrationSuccessToast}
+          onDidDismiss={() => setShowRegistrationSuccessToast(false)}
+          message="Registration successful!"
+          duration={3000}
+          color="success"
         />
       </IonContent>
     </IonPage>
