@@ -14,23 +14,28 @@ import {
   IonToast,
 } from '@ionic/react';
 
-const Login: React.FC = () => {
+const Registration: React.FC = () => {
   const navigation = useIonRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
   const [showLoading, setShowLoading] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [showErrorToast, setShowErrorToast] = useState(false);
 
-  const doLogin = () => {
-    // Simulate login validation
-    if (username === 'admin' && password === 'password') {
+  const doRegister = () => {
+    // Simulate registration process
+    if (username && password && email) {
       setShowLoading(true); // Show loading indicator
       setTimeout(() => {
         setShowLoading(false);
-        navigation.push('/it35-lab/app', 'forward', 'replace'); // Navigate to the app
-      }, 2000); // Simulate a 2-second delay for login
+        setShowSuccessToast(true); // Show success toast
+        setTimeout(() => {
+          navigation.push('/login', 'back', 'replace'); // Navigate back to login after success
+        }, 2000); // Wait 2 seconds before navigating
+      }, 2000); // Simulate a 2-second delay for registration
     } else {
-      setShowErrorToast(true); // Show error toast for invalid credentials
+      setShowErrorToast(true); // Show error toast for invalid input
     }
   };
 
@@ -38,7 +43,7 @@ const Login: React.FC = () => {
     <IonPage>
       <IonHeader>
         <IonToolbar>
-          <IonTitle>Login</IonTitle>
+          <IonTitle>Registration</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
@@ -53,6 +58,17 @@ const Login: React.FC = () => {
           />
         </IonItem>
 
+        {/* Email Input */}
+        <IonItem>
+          <IonLabel position="floating">Email</IonLabel>
+          <IonInput
+            type="email"
+            value={email}
+            onIonChange={(e) => setEmail(e.detail.value!)}
+            placeholder="Enter your email"
+          />
+        </IonItem>
+
         {/* Password Input */}
         <IonItem>
           <IonLabel position="floating">Password</IonLabel>
@@ -64,34 +80,43 @@ const Login: React.FC = () => {
           />
         </IonItem>
 
-        {/* Login Button */}
-        <IonButton onClick={doLogin} expand="full" className="ion-margin-top">
-          Login
+        {/* Register Button */}
+        <IonButton onClick={doRegister} expand="full" className="ion-margin-top">
+          Register
         </IonButton>
 
-        {/* Registration Button */}
+        {/* Back to Login Button */}
         <IonButton
-          onClick={() => navigation.push('/registration', 'forward', 'replace')}
+          onClick={() => navigation.push('/login', 'back', 'replace')}
           expand="full"
           className="ion-margin-top"
-          color="secondary"
+          color="medium"
         >
-          Register
+          Back to Login
         </IonButton>
 
         {/* Loading Indicator */}
         <IonLoading
           isOpen={showLoading}
-          message={'Logging in...'}
+          message={'Registering...'}
           duration={2000}
           onDidDismiss={() => setShowLoading(false)}
+        />
+
+        {/* Success Toast */}
+        <IonToast
+          isOpen={showSuccessToast}
+          onDidDismiss={() => setShowSuccessToast(false)}
+          message="Registration successful! Redirecting to login..."
+          duration={3000}
+          color="success"
         />
 
         {/* Error Toast */}
         <IonToast
           isOpen={showErrorToast}
           onDidDismiss={() => setShowErrorToast(false)}
-          message="Invalid username or password!"
+          message="Please fill in all fields!"
           duration={3000}
           color="danger"
         />
@@ -100,4 +125,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default Registration;
