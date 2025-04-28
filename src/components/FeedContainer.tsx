@@ -8,7 +8,7 @@ import {
 } from '@ionic/react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabaseClient';
-import { pencil } from 'ionicons/icons';
+import { pencil, trash } from 'ionicons/icons';
 
 interface Post {
   post_id: string;
@@ -61,6 +61,7 @@ const FeedContainer = () => {
   const [showReactionPicker, setShowReactionPicker] = useState<{postId: string | null, show: boolean}>({postId: null, show: false});
   const [isReacting, setIsReacting] = useState(false);
   const [tablesInitialized, setTablesInitialized] = useState(false);
+  const [lastReactionClick, setLastReactionClick] = useState<number>(0);
 
   // Initialize database tables
   useEffect(() => {
@@ -82,6 +83,7 @@ const FeedContainer = () => {
               reaction_type TEXT NOT NULL CHECK (reaction_type IN ('like', 'love', 'haha', 'wow', 'sad', 'angry')),
               created_at TIMESTAMPTZ DEFAULT NOW(),
               UNIQUE(post_id, user_id)
+            )
           `);
 
           if (createError) throw createError;
@@ -253,68 +255,97 @@ const FeedContainer = () => {
   };
 
   const handleReaction = async (postId: string, reactionType: string) => {
-    if (!user || isReacting || !tablesInitialized) return;
+    const now = Date.now();
+    if (!user || isReacting || !tablesInitialized || now - lastReactionClick < 500) return;
+    
+    setLastReactionClick(now);
     setIsReacting(true);
-
+    
     try {
       const existingReaction = reactions[postId]?.find(r => r.user_id === user.id);
+      const isSameReaction = existingReaction?.reaction_type === reactionType;
       
-      // Remove existing reaction if it exists
-      if (existingReaction) {
-        const { error: deleteError } = await supabase
+      // Optimistic UI update
+      const updatedReactions = { ...reactions };
+      const updatedUserReactions = { ...userReactions };
+      
+      if (isSameReaction) {
+        // Remove reaction
+        updatedReactions[postId] = updatedReactions[postId]?.filter(r => r.user_id !== user.id) || [];
+        delete updatedUserReactions[postId];
+      } else {
+        // Add/change reaction
+        const newReaction = {
+          id: `temp-${Date.now()}`,
+          post_id: postId,
+          user_id: user.id,
+          reaction_type: reactionType,
+          created_at: new Date().toISOString()
+        };
+        
+        updatedReactions[postId] = [
+          ...(updatedReactions[postId]?.filter(r => r.user_id !== user.id) || []),
+          newReaction
+        ];
+        updatedUserReactions[postId] = reactionType;
+      }
+      
+      setReactions(updatedReactions);
+      setUserReactions(updatedUserReactions);
+      
+      // Database operation
+      if (isSameReaction) {
+        // Delete existing reaction
+        const { error } = await supabase
           .from('reactions')
           .delete()
-          .eq('id', existingReaction.id);
-
-        if (deleteError) throw deleteError;
-      }
-
-      // If clicking different reaction or adding new one
-      if (!existingReaction || existingReaction.reaction_type !== reactionType) {
-        const { data, error: insertError } = await supabase
-          .from('reactions')
-          .insert([{ 
-            post_id: postId, 
-            user_id: user.id, 
-            reaction_type: reactionType 
-          }])
-          .select();
-
-        if (insertError) throw insertError;
-
-        // Update state
-        setReactions(prev => ({
-          ...prev,
-          [postId]: [
-            ...(prev[postId]?.filter(r => r.user_id !== user.id) || []),
-            data[0]
-          ]
-        }));
-
-        setUserReactions(prev => ({
-          ...prev,
-          [postId]: reactionType
-        }));
-      } else {
-        // If removing reaction
-        setReactions(prev => ({
-          ...prev,
-          [postId]: prev[postId]?.filter(r => r.id !== existingReaction.id) || []
-        }));
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
         
-        setUserReactions(prev => {
-          const newReactions = { ...prev };
-          delete newReactions[postId];
-          return newReactions;
-        });
+        if (error) throw error;
+      } else {
+        // Upsert reaction
+        const { data, error } = await supabase
+          .from('reactions')
+          .upsert({
+            post_id: postId,
+            user_id: user.id,
+            reaction_type: reactionType
+          }, {
+            onConflict: 'post_id,user_id'
+          })
+          .select();
+        
+        if (error) throw error;
+        
+        // Update with real database ID
+        if (data && data[0]) {
+          setReactions(prev => ({
+            ...prev,
+            [postId]: prev[postId]?.map(r => 
+              r.user_id === user.id ? { ...r, id: data[0].id } : r
+            ) || []
+          }));
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error handling reaction:', error);
-      setAlertMessage('Failed to update reaction');
-      setIsAlertOpen(true);
+      
+      // Handle duplicate reaction error specifically
+      if (error.code === '23505') {
+        setAlertMessage("You've already reacted to this post");
+        setIsAlertOpen(true);
+      } else {
+        setAlertMessage('Failed to update reaction');
+        setIsAlertOpen(true);
+      }
+      
+      // Revert optimistic update
+      setReactions(prev => ({ ...prev }));
+      setUserReactions(prev => ({ ...prev }));
     } finally {
       setIsReacting(false);
-      setShowReactionPicker({postId: null, show: false});
+      setShowReactionPicker({ postId: null, show: false });
     }
   };
 
@@ -389,7 +420,7 @@ const FeedContainer = () => {
                             fill="clear"
                             onClick={(e) => setPopoverState({ open: true, event: e.nativeEvent, postId: post.post_id })}
                           >
-                            <IonIcon color="secondary" icon={pencil} />
+                            <IonIcon icon={pencil} />
                           </IonButton>
                         </IonCol>
                       </IonRow>
@@ -452,17 +483,23 @@ const FeedContainer = () => {
                         </IonButton>
                         
                         {showReactionPicker.postId === post.post_id && showReactionPicker.show && (
-                          <div style={{
-                            position: 'absolute',
-                            bottom: '40px',
-                            left: '0',
-                            backgroundColor: 'white',
-                            borderRadius: '50px',
-                            padding: '4px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                            display: 'flex',
-                            zIndex: 100
-                          }}>
+                          <div 
+                            style={{
+                              position: 'absolute',
+                              bottom: '40px',
+                              left: '0',
+                              backgroundColor: 'white',
+                              borderRadius: '50px',
+                              padding: '4px',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                              display: 'flex',
+                              zIndex: 100,
+                              animation: 'fadeIn 0.2s ease-out'
+                            }}
+                            onMouseLeave={() => setShowReactionPicker(prev => 
+                              prev.postId === post.post_id ? { ...prev, show: false } : prev
+                            )}
+                          >
                             {REACTION_TYPES.map(type => (
                               <IonButton 
                                 key={type}
@@ -499,6 +536,7 @@ const FeedContainer = () => {
                           setPopoverState({ open: false, event: null, postId: null }); 
                         }}
                       >
+                        <IonIcon slot="start" icon={pencil} />
                         Edit
                       </IonButton>
                       <IonButton 
@@ -509,6 +547,7 @@ const FeedContainer = () => {
                           setPopoverState({ open: false, event: null, postId: null }); 
                         }}
                       >
+                        <IonIcon slot="start" icon={trash} />
                         Delete
                       </IonButton>
                     </IonPopover>
