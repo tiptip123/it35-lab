@@ -12,7 +12,7 @@ import { pencil, trash } from 'ionicons/icons';
 
 interface Post {
   post_id: string;
-  user_id: string;
+  user_id: number;
   username: string;
   avatar_url: string;
   post_content: string;
@@ -102,8 +102,6 @@ const FeedContainer = () => {
 
   // Fetch user and posts data
   useEffect(() => {
-    if (!tablesInitialized) return;
-
     const fetchData = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();
@@ -116,7 +114,7 @@ const FeedContainer = () => {
             .single();
           
           if (!error && userData) {
-            setUser({ ...user, id: userData.user_id.toString() });
+            setUser({ ...user, id: userData.user_id });
             setUsername(userData.username);
           }
         }
@@ -127,10 +125,7 @@ const FeedContainer = () => {
           .order('post_created_at', { ascending: false });
         
         if (!postsError) {
-          setPosts(postsData.map(post => ({
-            ...post,
-            user_id: post.user_id.toString()
-          })));
+          setPosts(postsData as Post[]);
         }
 
         const { data: reactionsData, error: reactionsError } = await supabase
@@ -143,15 +138,12 @@ const FeedContainer = () => {
           
           reactionsData.forEach(reaction => {
             const postId = reaction.post_id;
-            const userId = reaction.user_id.toString();
+            const userId = reaction.user_id;
             
             if (!reactionsMap[postId]) {
               reactionsMap[postId] = [];
             }
-            reactionsMap[postId].push({
-              ...reaction,
-              user_id: userId
-            });
+            reactionsMap[postId].push(reaction);
             
             if (user && userId === user.id) {
               userReactionsMap[postId] = reaction.reaction_type;
@@ -168,38 +160,39 @@ const FeedContainer = () => {
       }
     };
 
-    fetchData();
+    if (tablesInitialized) {
+      fetchData();
+    }
   }, [tablesInitialized, user?.id]);
 
   const createPost = async () => {
     if (!postContent || !user || !username) return;
   
     try {
-      const { data: userData } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('user_avatar_url')
         .eq('user_id', user.id)
         .single();
-    
+  
+      if (userError) {
+        console.error('Error fetching user avatar:', userError);
+        return;
+      }
+  
       const avatarUrl = userData?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg';
-    
+  
       const { data, error } = await supabase
         .from('posts')
-        .insert([{ 
-          post_content: postContent, 
-          user_id: user.id, 
-          username, 
-          avatar_url: avatarUrl 
-        }])
+        .insert([
+          { post_content: postContent, user_id: user.id, username, avatar_url: avatarUrl }
+        ])
         .select('*');
-    
-      if (error) throw error;
-      
-      setPosts([{
-        ...data[0],
-        user_id: data[0].user_id.toString()
-      }, ...posts]);
-      setPostContent('');
+  
+      if (!error && data) {
+        setPosts([data[0] as Post, ...posts]);
+        setPostContent('');
+      }
     } catch (error) {
       console.error('Error creating post:', error);
       setAlertMessage('Failed to create post');
@@ -237,10 +230,7 @@ const FeedContainer = () => {
       
       if (error) throw error;
       
-      const updatedPost = {
-        ...data[0],
-        user_id: data[0].user_id.toString()
-      } as Post;
+      const updatedPost = data[0] as Post;
       setPosts(posts.map(post => (post.post_id === updatedPost.post_id ? updatedPost : post)));
       setPostContent('');
       setEditingPost(null);
@@ -387,10 +377,10 @@ const FeedContainer = () => {
                   <IonCardTitle>Create Post</IonCardTitle>
                 </IonCardHeader>
                 <IonCardContent>
-                  <IonInput 
-                    value={postContent} 
-                    onIonChange={e => setPostContent(e.detail.value!)} 
-                    placeholder="Write a post..." 
+                  <IonInput
+                    value={postContent}
+                    onIonChange={e => setPostContent(e.detail.value!)}
+                    placeholder="Write a post..."
                   />
                 </IonCardContent>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.5rem' }}>
