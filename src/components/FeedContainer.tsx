@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { IonApp, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton, IonInput, IonLabel, IonModal, IonFooter, IonCard, IonCardContent, IonCardHeader, IonCardSubtitle, IonCardTitle, IonAlert, IonText, IonAvatar, IonCol, IonGrid, IonRow, IonIcon, IonPopover } from '@ionic/react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabaseClient';
-import { pencil, trash } from 'ionicons/icons';
+import { pencil, trash, chatbubbleOutline, send } from 'ionicons/icons';
 
 interface Post {
   post_id: string;
@@ -19,6 +19,16 @@ interface Reaction {
   post_id: string;
   user_id: string;
   reaction_type: string;
+  created_at: string;
+}
+
+interface Comment {
+  comment_id: string;
+  post_id: string;
+  user_id: string;
+  username: string;
+  avatar_url: string;
+  comment_content: string;
   created_at: string;
 }
 
@@ -44,6 +54,9 @@ const FeedContainer = () => {
   const [reactions, setReactions] = useState<Record<string, Reaction[]>>({});
   const [userReactions, setUserReactions] = useState<Record<string, string>>({});
   const [showReactionPicker, setShowReactionPicker] = useState<{postId: string | null, show: boolean}>({postId: null, show: false});
+  const [comments, setComments] = useState<Record<string, Comment[]>>({});
+  const [commentContent, setCommentContent] = useState<Record<string, string>>({});
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -92,15 +105,32 @@ const FeedContainer = () => {
       }
     };
 
+    const fetchComments = async () => {
+      const { data, error } = await supabase.from('comments').select('*').order('created_at', { ascending: true });
+      if (!error) {
+        const commentsMap: Record<string, Comment[]> = {};
+        
+        data.forEach(comment => {
+          const postId = comment.post_id;
+          if (!commentsMap[postId]) {
+            commentsMap[postId] = [];
+          }
+          commentsMap[postId].push(comment);
+        });
+        
+        setComments(commentsMap);
+      }
+    };
+
     fetchUser();
     fetchPosts();
     fetchReactions();
+    fetchComments();
   }, [user?.id]);
 
   const createPost = async () => {
     if (!postContent || !user || !username) return;
   
-    // Fetch avatar URL
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('user_avatar_url')
@@ -114,7 +144,6 @@ const FeedContainer = () => {
   
     const avatarUrl = userData?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg';
   
-    // Insert post with avatar URL
     const { data, error } = await supabase
       .from('posts')
       .insert([
@@ -163,16 +192,13 @@ const FeedContainer = () => {
     const existingReaction = reactions[postId]?.find(r => r.user_id === user.id);
     const isSameReaction = existingReaction?.reaction_type === reactionType;
     
-    // Optimistic update
     const updatedReactions = { ...reactions };
     const updatedUserReactions = { ...userReactions };
     
     if (isSameReaction) {
-      // Remove reaction
       updatedReactions[postId] = updatedReactions[postId]?.filter(r => r.user_id !== user.id) || [];
       delete updatedUserReactions[postId];
     } else {
-      // Add/change reaction
       const newReaction = {
         id: `temp-${Date.now()}`,
         post_id: postId,
@@ -191,7 +217,6 @@ const FeedContainer = () => {
     setReactions(updatedReactions);
     setUserReactions(updatedUserReactions);
     
-    // Database operation
     if (isSameReaction) {
       await supabase
         .from('reactions')
@@ -231,6 +256,65 @@ const FeedContainer = () => {
     };
   };
 
+  const toggleComments = (postId: string) => {
+    setExpandedComments(prev => ({
+      ...prev,
+      [postId]: !prev[postId]
+    }));
+  };
+
+  const addComment = async (postId: string) => {
+    if (!user || !username || !commentContent[postId]?.trim()) return;
+
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('user_avatar_url')
+      .eq('user_id', user.id)
+      .single();
+
+    if (userError) {
+      console.error('Error fetching user avatar:', userError);
+      return;
+    }
+
+    const avatarUrl = userData?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg';
+
+    const { data, error } = await supabase
+      .from('comments')
+      .insert([{
+        post_id: postId,
+        user_id: user.id,
+        username,
+        avatar_url: avatarUrl,
+        comment_content: commentContent[postId]
+      }])
+      .select('*');
+
+    if (!error && data) {
+      const newComment = data[0] as Comment;
+      setComments(prev => ({
+        ...prev,
+        [postId]: [...(prev[postId] || []), newComment]
+      }));
+      setCommentContent(prev => ({ ...prev, [postId]: '' }));
+    }
+  };
+
+  const deleteComment = async (commentId: string, postId: string) => {
+    await supabase.from('comments').delete().match({ comment_id: commentId });
+    setComments(prev => ({
+      ...prev,
+      [postId]: prev[postId].filter(comment => comment.comment_id !== commentId)
+    }));
+  };
+
+  const handleCommentChange = (postId: string, content: string) => {
+    setCommentContent(prev => ({
+      ...prev,
+      [postId]: content
+    }));
+  };
+
   return (
     <>
       <IonContent>
@@ -255,6 +339,7 @@ const FeedContainer = () => {
             {posts.map(post => {
               const reactionSummary = getReactionSummary(post.post_id);
               const userReaction = userReactions[post.post_id];
+              const postComments = comments[post.post_id] || [];
               
               return (
                 <IonCard key={post.post_id} style={{ marginTop: '2rem' }}>
@@ -330,6 +415,21 @@ const FeedContainer = () => {
                         </div>
                       </IonButton>
                       
+                      <IonButton
+                        fill="clear"
+                        size="small"
+                        color="medium"
+                        onClick={() => toggleComments(post.post_id)}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <IonIcon icon={chatbubbleOutline} style={{ marginRight: '4px' }} />
+                          <span>Comment</span>
+                          {postComments.length > 0 && (
+                            <span style={{ marginLeft: '4px' }}>({postComments.length})</span>
+                          )}
+                        </div>
+                      </IonButton>
+                      
                       {showReactionPicker.postId === post.post_id && showReactionPicker.show && (
                         <div
                           style={{
@@ -366,6 +466,60 @@ const FeedContainer = () => {
                         </div>
                       )}
                     </div>
+
+                    {expandedComments[post.post_id] && (
+                      <div style={{ marginTop: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
+                        {postComments.map(comment => (
+                          <div key={comment.comment_id} style={{ 
+                            display: 'flex', 
+                            marginBottom: '8px',
+                            padding: '8px',
+                            backgroundColor: '#f9f9f9',
+                            borderRadius: '8px'
+                          }}>
+                            <IonAvatar style={{ width: '32px', height: '32px', marginRight: '8px' }}>
+                              <img src={comment.avatar_url} alt={comment.username} />
+                            </IonAvatar>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{comment.username}</div>
+                              <div style={{ fontSize: '14px' }}>{comment.comment_content}</div>
+                              <div style={{ fontSize: '12px', color: '#65676B' }}>
+                                {new Date(comment.created_at).toLocaleString()}
+                              </div>
+                            </div>
+                            {user?.id === comment.user_id && (
+                              <IonButton 
+                                fill="clear" 
+                                size="small" 
+                                color="danger"
+                                onClick={() => deleteComment(comment.comment_id, post.post_id)}
+                              >
+                                <IonIcon icon={trash} />
+                              </IonButton>
+                            )}
+                          </div>
+                        ))}
+
+                        <div style={{ display: 'flex', alignItems: 'center', marginTop: '8px' }}>
+                          <IonAvatar style={{ width: '32px', height: '32px', marginRight: '8px' }}>
+                            <img src={user?.user_metadata?.avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg'} alt={username || ''} />
+                          </IonAvatar>
+                          <IonInput
+                            value={commentContent[post.post_id] || ''}
+                            onIonChange={e => handleCommentChange(post.post_id, e.detail.value!)}
+                            placeholder="Write a comment..."
+                            style={{ flex: 1, fontSize: '14px' }}
+                          />
+                          <IonButton 
+                            fill="clear" 
+                            onClick={() => addComment(post.post_id)}
+                            disabled={!commentContent[post.post_id]?.trim()}
+                          >
+                            <IonIcon icon={send} />
+                          </IonButton>
+                        </div>
+                      </div>
+                    )}
                   </IonCardContent>
   
                   <IonPopover
