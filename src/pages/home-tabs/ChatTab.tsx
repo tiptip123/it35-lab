@@ -31,9 +31,26 @@ interface ChatUser {
 }
 
 interface Message {
+  id?: number;
   user: string;       // Username of sender
   message: string;    // Message content
   isCurrentUser?: boolean; // For styling
+}
+
+// Message type for DB
+interface DBMessage {
+  id: number;
+  sender_id: number;
+  receiver_id: number;
+  content: string;
+  created_at: string;
+}
+
+// For TypeScript: extend window to allow chatMessageChannel
+declare global {
+  interface Window {
+    chatMessageChannel?: any;
+  }
 }
 
 const ChatTab: React.FC = () => {
@@ -45,25 +62,34 @@ const ChatTab: React.FC = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [activeChatUser, setActiveChatUser] = useState<ChatUser | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [activeChatUserId, setActiveChatUserId] = useState<number | null>(null);
+  const [userIdToName, setUserIdToName] = useState<Record<number, string>>({});
 
   // Keep your existing contact fetching logic
   useEffect(() => {
     const fetchUsersAndSetupPresence = async () => {
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-
         if (authError) throw authError;
         if (!user) return;
-
         setCurrentUser(user);
 
-        const userIdAsInt = parseInt(user.id, 10);
+        // Use user_email to get current user's user_id and username
+        const { data: userRow, error: userRowError } = await supabase
+          .from('users')
+          .select('user_id, username')
+          .eq('user_email', user.email)
+          .single();
+        if (userRowError || !userRow) throw userRowError || new Error('Current user not found');
+        setCurrentUserId(userRow.user_id);
+
+        // Fetch all other users as before
         const { data, error } = await supabase
           .from('users')
           .select('user_id, username, user_avatar_url, last_online')
-          .neq('user_id', userIdAsInt)
+          .neq('user_id', userRow.user_id)
           .order('username', { ascending: true });
-
         if (error) throw error;
 
         const now = new Date();
@@ -76,6 +102,11 @@ const ChatTab: React.FC = () => {
           online: dbUser.last_online ? new Date(dbUser.last_online) > threshold : false,
           last_online: dbUser.last_online || ''
         }));
+        // Build userId to username map (including self)
+        const userMap: Record<number, string> = {};
+        formattedUsers.forEach(u => { userMap[parseInt(u.id)] = u.username; });
+        userMap[userRow.user_id] = typeof userRow.username === 'string' ? userRow.username : (user.email?.split('@')[0] ?? 'You');
+        setUserIdToName(userMap);
 
         setUsers(formattedUsers);
       } catch (err) {
@@ -95,46 +126,90 @@ const ChatTab: React.FC = () => {
     user.username.toLowerCase().includes(searchText.toLowerCase())
   );
 
-  const openChat = (user: ChatUser) => {
+  // Load message history and subscribe to real-time updates
+  const openChat = async (user: ChatUser) => {
     setActiveChatUser(user);
     setIsChatOpen(true);
-    // Clear previous messages when opening new chat
+    setActiveChatUserId(parseInt(user.id));
     setMessages([]);
+
+    if (!currentUserId) return;
+
+    // Fetch message history
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .or(
+        `and(sender_id.eq.${currentUserId},receiver_id.eq.${user.id}),` +
+        `and(sender_id.eq.${user.id},receiver_id.eq.${currentUserId})`
+      )
+      .order('created_at', { ascending: true });
+
+    if (!error && data) {
+      setMessages(
+        data.map((msg: DBMessage) => ({
+          id: msg.id,
+          user: String(userIdToName[msg.sender_id] || msg.sender_id),
+          message: msg.content,
+          isCurrentUser: msg.sender_id === currentUserId
+        }))
+      );
+    }
+
+    // Subscribe to real-time updates for this chat
+    if (window.chatMessageChannel) {
+      supabase.removeChannel(window.chatMessageChannel);
+    }
+    window.chatMessageChannel = supabase
+      .channel('chat-messages')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `or(and(sender_id.eq.${currentUserId},receiver_id.eq.${user.id}),and(sender_id.eq.${user.id},receiver_id.eq.${currentUserId}))`
+      }, async (payload: { new: DBMessage }) => {
+        const msg: DBMessage = payload.new;
+        setMessages(prev => {
+          const senderName = String(userIdToName[msg.sender_id] || msg.sender_id);
+          if (prev.some(m => m.id === msg.id || (m.message === msg.content && m.user === senderName && m.isCurrentUser === (msg.sender_id === currentUserId)))) return prev;
+          return [
+            ...prev,
+            {
+              id: msg.id,
+              user: senderName,
+              message: msg.content,
+              isCurrentUser: msg.sender_id === currentUserId
+            }
+          ];
+        });
+      })
+      .subscribe();
   };
 
+  // Clean up channel on unmount or chat change
+  useEffect(() => {
+    return () => {
+      if (window.chatMessageChannel) {
+        supabase.removeChannel(window.chatMessageChannel);
+        window.chatMessageChannel = null;
+      }
+    };
+  }, [activeChatUserId]);
+
   const sendMessage = async () => {
-    if (!message.trim() || !currentUser || !activeChatUser) return;
-    
+    if (!message.trim() || !currentUser || !activeChatUser || !currentUserId) return;
     try {
-      // First get the current user's integer ID from users table
-      const { data: currentUserData, error: userError } = await supabase
-        .from('users')
-        .select('user_id')
-        .eq('id', currentUser.id)  // Match UUID from auth with users table
-        .single();
-  
-      if (userError || !currentUserData) throw userError || new Error('Current user not found');
-  
-      const currentUserId = currentUserData.user_id;
       const otherUserId = parseInt(activeChatUser.id);
-  
-      // Verify both users exist
-      const { error: verifyError } = await supabase
-        .from('users')
-        .select('user_id')
-        .in('user_id', [currentUserId, otherUserId]);
-  
-      if (verifyError) throw verifyError;
-  
-      // Create new message object with proper username
-      const newMessage = { 
-        user: currentUser.user_metadata?.username || 
-              currentUser.email?.split('@')[0] || 
-              'You',
-        message,
-        isCurrentUser: true
-      };
-      
+      // Optimistically add the message to the UI
+      setMessages(prev => ([
+        ...prev,
+        {
+          id: Date.now(), // temp id
+          user: String(userIdToName[currentUserId] || 'You'),
+          message,
+          isCurrentUser: true
+        }
+      ]));
       // Save to database
       const { error } = await supabase
         .from('messages')
@@ -143,15 +218,10 @@ const ChatTab: React.FC = () => {
           receiver_id: otherUserId,
           content: message
         });
-  
       if (error) throw error;
-  
-      // Update UI
-      setMessages([...messages, newMessage]);
-      setMessage('');
+      setMessage(''); // Only clear input
     } catch (err) {
       console.error('Error sending message:', err);
-      // Optionally show error to user
     }
   };
 
