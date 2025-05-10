@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { IonApp, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton, IonInput, IonLabel, IonModal, IonFooter, IonCard, IonCardContent, IonCardHeader, IonCardSubtitle, IonCardTitle, IonAlert, IonText, IonAvatar, IonCol, IonGrid, IonRow, IonIcon, IonPopover } from '@ionic/react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabaseClient';
-import { pencil, trash, chatbubbleOutline, send } from 'ionicons/icons';
+import { pencil, trash, chatbubbleOutline, send, camera } from 'ionicons/icons';
 
 interface Post {
   post_id: string;
@@ -10,6 +10,7 @@ interface Post {
   username: string;
   avatar_url: string;
   post_content: string;
+  post_image_url?: string;
   post_created_at: string;
   post_updated_at: string;
 }
@@ -30,6 +31,20 @@ interface Comment {
   avatar_url: string;
   comment_content: string;
   created_at: string;
+}
+
+interface UserReaction {
+  username: string;
+  reaction_type: string;
+}
+
+interface ReactionData {
+  post_id: string;
+  reaction_type: string;
+  user_id: string;
+  users: {
+    username: string;
+  };
 }
 
 const REACTION_TYPES = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
@@ -57,6 +72,13 @@ const FeedContainer = () => {
   const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [commentContent, setCommentContent] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+  const [postImage, setPostImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [hoveredReactions, setHoveredReactions] = useState<{postId: string | null, show: boolean}>({postId: null, show: false});
+  const [reactionUsers, setReactionUsers] = useState<Record<string, UserReaction[]>>({});
+  const [userIntId, setUserIntId] = useState<number | null>(null);
+  const [viewImageUrl, setViewImageUrl] = useState<string | null>(null);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -69,6 +91,7 @@ const FeedContainer = () => {
           .eq('user_email', authData.user.email)
           .single();
         if (!error && userData) {
+          setUserIntId(userData.user_id);
           setUser({ ...authData.user, id: userData.user_id });
           setUsername(userData.username);
         }
@@ -122,40 +145,110 @@ const FeedContainer = () => {
       }
     };
 
+    const fetchReactionUsers = async () => {
+      const { data, error } = await supabase
+        .from('reactions')
+        .select(`
+          post_id,
+          reaction_type,
+          user_id,
+          users (
+            username
+          )
+        `);
+
+      if (!error && data) {
+        const usersMap: Record<string, UserReaction[]> = {};
+        data.forEach(reaction => {
+          const postId = reaction.post_id;
+          if (!usersMap[postId]) usersMap[postId] = [];
+          let username: string | null = null;
+          const usersField = reaction.users as any;
+          if (Array.isArray(usersField) && usersField.length > 0 && typeof usersField[0].username === 'string') {
+            username = usersField[0].username;
+          } else if (usersField && typeof usersField.username === 'string') {
+            username = usersField.username;
+          }
+          if (username) {
+            usersMap[postId].push({
+              username,
+              reaction_type: reaction.reaction_type
+            });
+          }
+        });
+        setReactionUsers(usersMap);
+      }
+    };
+
     fetchUser();
     fetchPosts();
     fetchReactions();
     fetchComments();
+    fetchReactionUsers();
   }, [user?.id]);
 
   const createPost = async () => {
     if (!postContent || !user || !username) return;
-  
-    const { data: userData, error: userError } = await supabase
+
+    const { data: userRow, error: userRowError } = await supabase
       .from('users')
-      .select('user_avatar_url')
-      .eq('user_id', user.id)
+      .select('user_id, username, user_avatar_url')
+      .eq('user_email', user.email)
       .single();
-  
-    if (userError) {
-      console.error('Error fetching user avatar:', userError);
+
+    if (userRowError || !userRow) {
       return;
     }
-  
-    const avatarUrl = userData?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg';
-  
+
+    let postImageUrl = null;
+    if (postImage) {
+      const fileExt = postImage.name.split('.').pop();
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('post-images')
+        .upload(fileName, postImage);
+      if (!uploadError) {
+        const { data: { publicUrl } } = supabase.storage
+          .from('post-images')
+          .getPublicUrl(fileName);
+        postImageUrl = publicUrl;
+      }
+    }
+
+    const now = new Date().toISOString();
     const { data, error } = await supabase
       .from('posts')
-      .insert([
-        { post_content: postContent, user_id: user.id, username, avatar_url: avatarUrl }
-      ])
-      .select('*');
-  
+      .insert({
+        user_id: userRow.user_id,
+        username: userRow.username,
+        post_content: postContent,
+        post_image_url: postImageUrl,
+        post_created_at: now,
+        post_updated_at: now,
+        avatar_url: userRow.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg'
+      })
+      .select();
+
     if (!error && data) {
       setPosts([data[0] as Post, ...posts]);
+      setPostContent('');
+      setPostImage(null);
+      setImagePreview(null);
+    } else {
+      console.error('Error creating post:', error);
     }
-  
-    setPostContent('');
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setPostImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const deletePost = async (post_id: string) => {
@@ -317,173 +410,372 @@ const FeedContainer = () => {
 
   return (
     <>
-      <IonContent>
+      <IonContent style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e0e7ff 0%, #fbc2eb 100%)' }}>
         {user ? (
           <>
-            <IonCard>
-              <IonCardHeader>
-                <IonCardTitle>Create Post</IonCardTitle>
+            <IonCard style={{ 
+              margin: '20px', 
+              borderRadius: '20px', 
+              boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+              background: 'linear-gradient(120deg, #f8fafc 60%, #e0e7ff 100%)',
+              border: '2px solid #a5b4fc',
+            }}>
+              <IonCardHeader style={{ padding: '20px', background: 'linear-gradient(90deg, #fbc2eb 0%, #a6c1ee 100%)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px' }}>
+                <IonRow className="ion-align-items-center">
+                  <IonCol size="auto">
+                    <IonAvatar style={{ 
+                      width: '40px', 
+                      height: '40px',
+                      border: '2px solid #3880ff',
+                      boxShadow: '0 2px 8px rgba(56, 128, 255, 0.3)'
+                    }}>
+                      <img src={user?.user_metadata?.avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg'} alt={username || ''} />
+                    </IonAvatar>
+                  </IonCol>
+                  <IonCol>
+                    <IonInput
+                      value={postContent}
+                      onIonChange={e => setPostContent(e.detail.value!)}
+                      placeholder="What's on your mind?"
+                      style={{ 
+                        '--padding-start': '0',
+                        '--background': 'transparent',
+                        '--placeholder-color': '#666',
+                        '--color': '#333'
+                      }}
+                    />
+                  </IonCol>
+                </IonRow>
               </IonCardHeader>
-              <IonCardContent>
-                <IonInput
-                  value={postContent}
-                  onIonChange={e => setPostContent(e.detail.value!)}
-                  placeholder="Write a post..."
-                />
-              </IonCardContent>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.5rem' }}>
-                <IonButton onClick={createPost}>Post</IonButton>
+              
+              {imagePreview && (
+                <div style={{ padding: '0 16px 16px' }}>
+                  <img 
+                    src={imagePreview} 
+                    alt="Preview" 
+                    style={{ 
+                      width: '100%', 
+                      maxHeight: '300px', 
+                      objectFit: 'cover',
+                      borderRadius: '12px',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }} 
+                  />
+                </div>
+              )}
+
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                padding: '16px',
+                borderTop: '1px solid rgba(0,0,0,0.1)',
+                background: 'linear-gradient(to right, #f8f9fa, #ffffff)'
+              }}>
+                <IonButton fill="clear" size="small">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ display: 'none' }}
+                    id="image-upload"
+                  />
+                  <label htmlFor="image-upload" style={{ cursor: 'pointer' }}>
+                    <IonIcon icon={camera} style={{ fontSize: '28px', color: '#7c3aed', transition: 'color 0.2s' }} />
+                  </label>
+                </IonButton>
+                <IonButton 
+                  onClick={createPost} 
+                  disabled={!postContent.trim() && !postImage}
+                  style={{
+                    '--background': 'linear-gradient(90deg, #7c3aed 0%, #fbc2eb 100%)',
+                    '--box-shadow': '0 4px 16px rgba(124, 58, 237, 0.2)',
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    letterSpacing: '1px',
+                    borderRadius: '12px',
+                    transition: 'background 0.2s',
+                  }}
+                >
+                  Share
+                </IonButton>
               </div>
             </IonCard>
-  
+
             {posts.map(post => {
               const reactionSummary = getReactionSummary(post.post_id);
               const userReaction = userReactions[post.post_id];
               const postComments = comments[post.post_id] || [];
               
               return (
-                <IonCard key={post.post_id} style={{ marginTop: '2rem' }}>
-                  <IonCardHeader>
-                    <IonRow>
-                      <IonCol size="1.85">
-                        <IonAvatar>
-                          <img alt={post.username} src={post.avatar_url} />
+                <IonCard key={post.post_id} style={{ 
+                  margin: '20px', 
+                  borderRadius: '20px', 
+                  boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+                  background: 'linear-gradient(120deg, #f8fafc 60%, #e0e7ff 100%)',
+                  border: '2px solid #a5b4fc',
+                }}>
+                  <IonCardHeader style={{ padding: '20px', background: 'linear-gradient(90deg, #fbc2eb 0%, #a6c1ee 100%)', borderTopLeftRadius: '20px', borderTopRightRadius: '20px' }}>
+                    <IonRow className="ion-align-items-center">
+                      <IonCol size="auto">
+                        <IonAvatar style={{ 
+                          width: '40px', 
+                          height: '40px',
+                          border: '2px solid #3880ff',
+                          boxShadow: '0 2px 8px rgba(56, 128, 255, 0.3)'
+                        }}>
+                          <img src={post.avatar_url} alt={post.username} />
                         </IonAvatar>
                       </IonCol>
                       <IonCol>
-                        <IonCardTitle style={{ marginTop: '10px' }}>{post.username}</IonCardTitle>
-                        <IonCardSubtitle>{new Date(post.post_created_at).toLocaleString()}</IonCardSubtitle>
+                        <IonText style={{ 
+                          fontWeight: 'bold',
+                          fontSize: '16px',
+                          color: '#333'
+                        }}>{post.username}</IonText>
+                        <div style={{ 
+                          fontSize: '12px',
+                          color: '#666',
+                          marginTop: '2px'
+                        }}>
+                          {new Date(post.post_created_at).toLocaleDateString()}
+                        </div>
                       </IonCol>
                       <IonCol size="auto">
-                        <IonButton
-                          fill="clear"
-                          onClick={(e) =>
-                            setPopoverState({
-                              open: true,
-                              event: e.nativeEvent,
-                              postId: post.post_id,
-                            })
-                          }
-                        >
-                          <IonIcon color="secondary" icon={pencil} />
-                        </IonButton>
+                        {userIntId !== null && post.user_id === userIntId && (
+                          <IonButton
+                            fill="clear"
+                            onClick={(e) =>
+                              setPopoverState({
+                                open: true,
+                                event: e.nativeEvent,
+                                postId: post.post_id,
+                              })
+                            }
+                          >
+                            <IonIcon icon={pencil} style={{ color: '#3880ff' }} />
+                          </IonButton>
+                        )}
                       </IonCol>
                     </IonRow>
                   </IonCardHeader>
-  
-                  <IonCardContent>
-                    <IonText style={{ color: 'black' }}>
-                      <h1>{post.post_content}</h1>
-                    </IonText>
-                    
-                    {reactionSummary && (
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '8px 0',
-                        borderBottom: '1px solid #f0f0f0'
-                      }}>
-                        <span style={{ fontSize: '16px', marginRight: '4px' }}>
-                          {reactionSummary.topReaction}
-                        </span>
-                        <span style={{ fontSize: '14px', color: '#65676B' }}>
-                          {reactionSummary.total}
-                        </span>
-                      </div>
-                    )}
-                    
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      padding: '4px 0',
-                      position: 'relative'
+
+                  {post.post_image_url && (
+                    <div
+                      style={{ width: '100%', maxHeight: '400px', overflow: 'hidden', cursor: 'pointer', background: '#f8f9fa' }}
+                      onClick={() => {
+                        setViewImageUrl(post.post_image_url!);
+                        setIsImageModalOpen(true);
+                      }}
+                    >
+                      <img
+                        src={post.post_image_url}
+                        alt="Post"
+                        style={{ width: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '12px', background: '#f8f9fa' }}
+                      />
+                    </div>
+                  )}
+
+                  <IonCardContent style={{ padding: '16px' }}>
+                    <div style={{ 
+                      marginBottom: '12px',
+                      fontSize: '15px',
+                      lineHeight: '1.5',
+                      color: '#333'
                     }}>
-                      <IonButton
-                        fill="clear"
-                        size="small"
-                        color={userReaction ? 'primary' : 'medium'}
-                        onMouseEnter={() => setShowReactionPicker({postId: post.post_id, show: true})}
-                        onClick={() => handleReaction(post.post_id, userReaction || 'like')}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <span style={{ fontSize: '18px', marginRight: '4px' }}>
-                            {userReaction ? REACTION_EMOJIS[userReaction as keyof typeof REACTION_EMOJIS] : '👍'}
-                          </span>
-                          <span>
-                            {userReaction ? userReaction.charAt(0).toUpperCase() + userReaction.slice(1) : 'Like'}
-                          </span>
-                        </div>
-                      </IonButton>
-                      
-                      <IonButton
-                        fill="clear"
-                        size="small"
-                        color="medium"
-                        onClick={() => toggleComments(post.post_id)}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-                          <IonIcon icon={chatbubbleOutline} style={{ marginRight: '4px' }} />
-                          <span>Comment</span>
-                          {postComments.length > 0 && (
-                            <span style={{ marginLeft: '4px' }}>({postComments.length})</span>
-                          )}
-                        </div>
-                      </IonButton>
-                      
-                      {showReactionPicker.postId === post.post_id && showReactionPicker.show && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            bottom: '40px',
-                            left: '0',
-                            backgroundColor: 'white',
-                            borderRadius: '50px',
-                            padding: '4px',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                            display: 'flex',
-                            zIndex: 100
-                          }}
-                          onMouseLeave={() => setShowReactionPicker(prev => 
-                            prev.postId === post.post_id ? { ...prev, show: false } : prev
-                          )}
-                        >
-                          {REACTION_TYPES.map(type => (
-                            <IonButton
-                              key={type}
-                              fill="clear"
-                              size="small"
-                              onClick={() => handleReaction(post.post_id, type)}
-                              style={{
-                                fontSize: '24px',
-                                padding: '4px',
-                                minWidth: 'auto',
-                                minHeight: 'auto'
-                              }}
-                            >
-                              {REACTION_EMOJIS[type as keyof typeof REACTION_EMOJIS]}
-                            </IonButton>
-                          ))}
-                        </div>
-                      )}
+                      <IonText style={{ whiteSpace: 'pre-wrap' }}>
+                        <span style={{ fontWeight: 'bold', marginRight: '4px' }}>{post.username}</span>
+                        {post.post_content}
+                      </IonText>
                     </div>
 
+                    {reactionSummary && (
+                      <div style={{ 
+                        padding: '8px 0',
+                        marginBottom: '12px',
+                        borderBottom: '1px solid rgba(0,0,0,0.1)',
+                        position: 'relative'
+                      }}
+                      onMouseEnter={() => setHoveredReactions({postId: post.post_id, show: true})}
+                      onMouseLeave={() => setHoveredReactions({postId: null, show: false})}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <span style={{ 
+                            fontSize: '16px', 
+                            marginRight: '4px',
+                            background: 'linear-gradient(45deg, #3880ff, #5260ff)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent'
+                          }}>
+                            {reactionSummary.topReaction}
+                          </span>
+                          <IonText color="medium" style={{ fontSize: '14px' }}>
+                            {reactionSummary.total} {reactionSummary.total === 1 ? 'reaction' : 'reactions'}
+                          </IonText>
+                        </div>
+
+                        {hoveredReactions.postId === post.post_id && hoveredReactions.show && reactionUsers[post.post_id] && (
+                          <div style={{
+                            position: 'absolute',
+                            bottom: '100%',
+                            left: '0',
+                            backgroundColor: 'white',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                            zIndex: 1000,
+                            minWidth: '200px',
+                            maxWidth: '300px'
+                          }}>
+                            <div style={{ 
+                              fontSize: '14px', 
+                              fontWeight: 'bold',
+                              marginBottom: '8px',
+                              color: '#333'
+                            }}>
+                              Reactions
+                            </div>
+                            {reactionUsers[post.post_id].map((userReaction, index) => (
+                              <div key={index} style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                marginBottom: '4px',
+                                fontSize: '14px'
+                              }}>
+                                <span style={{ marginRight: '8px' }}>
+                                  {REACTION_EMOJIS[userReaction.reaction_type as keyof typeof REACTION_EMOJIS]}
+                                </span>
+                                <span style={{ color: '#666' }}>{userReaction.username}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      padding: '8px 0',
+                      position: 'relative'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <IonButton
+                          fill="clear"
+                          size="small"
+                          color={userReaction ? 'primary' : 'medium'}
+                          style={{ color: userReaction ? '#7c3aed' : '#a1a1aa', fontWeight: 'bold', transition: 'color 0.2s' }}
+                          onMouseEnter={() => setShowReactionPicker({postId: post.post_id, show: true})}
+                          onClick={() => handleReaction(post.post_id, userReaction || 'like')}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <span style={{ fontSize: '20px', marginRight: '6px' }}>
+                              {userReaction ? REACTION_EMOJIS[userReaction as keyof typeof REACTION_EMOJIS] : '👍'}
+                            </span>
+                            <span>
+                              {userReaction ? userReaction.charAt(0).toUpperCase() + userReaction.slice(1) : 'React'}
+                            </span>
+                          </div>
+                        </IonButton>
+                        
+                        <IonButton
+                          fill="clear"
+                          size="small"
+                          color="medium"
+                          style={{ color: '#6366f1', fontWeight: 'bold', transition: 'color 0.2s' }}
+                          onClick={() => toggleComments(post.post_id)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <IonIcon icon={chatbubbleOutline} style={{ marginRight: '6px' }} />
+                            <span>Comment</span>
+                            {postComments.length > 0 && (
+                              <span style={{ marginLeft: '6px' }}>({postComments.length})</span>
+                            )}
+                          </div>
+                        </IonButton>
+                      </div>
+                    </div>
+
+                    {showReactionPicker.postId === post.post_id && showReactionPicker.show && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: '40px',
+                          left: '0',
+                          backgroundColor: 'white',
+                          borderRadius: '50px',
+                          padding: '8px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          display: 'flex',
+                          zIndex: 100,
+                          background: 'linear-gradient(to right, #ffffff, #f8f9fa)'
+                        }}
+                        onMouseLeave={() => setShowReactionPicker(prev => 
+                          prev.postId === post.post_id ? { ...prev, show: false } : prev
+                        )}
+                      >
+                        {REACTION_TYPES.map(type => (
+                          <IonButton
+                            key={type}
+                            fill="clear"
+                            size="small"
+                            onClick={() => handleReaction(post.post_id, type)}
+                            style={{
+                              fontSize: '24px',
+                              padding: '4px',
+                              minWidth: 'auto',
+                              minHeight: 'auto',
+                              transition: 'transform 0.2s',
+                              '&:hover': {
+                                transform: 'scale(1.2)'
+                              }
+                            }}
+                          >
+                            {REACTION_EMOJIS[type as keyof typeof REACTION_EMOJIS]}
+                          </IonButton>
+                        ))}
+                      </div>
+                    )}
+
                     {expandedComments[post.post_id] && (
-                      <div style={{ marginTop: '16px', borderTop: '1px solid #f0f0f0', paddingTop: '8px' }}>
+                      <div style={{ 
+                        marginTop: '16px',
+                        padding: '16px',
+                        background: 'linear-gradient(to right, #f8f9fa, #ffffff)',
+                        borderRadius: '12px'
+                      }}>
                         {postComments.map(comment => (
                           <div key={comment.comment_id} style={{ 
                             display: 'flex', 
-                            marginBottom: '8px',
-                            padding: '8px',
-                            backgroundColor: '#f9f9f9',
-                            borderRadius: '8px'
+                            marginBottom: '12px',
+                            padding: '12px',
+                            background: 'white',
+                            borderRadius: '8px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
                           }}>
-                            <IonAvatar style={{ width: '32px', height: '32px', marginRight: '8px' }}>
+                            <IonAvatar style={{ 
+                              width: '32px', 
+                              height: '32px',
+                              marginRight: '12px',
+                              border: '1px solid #3880ff'
+                            }}>
                               <img src={comment.avatar_url} alt={comment.username} />
                             </IonAvatar>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{comment.username}</div>
-                              <div style={{ fontSize: '14px' }}>{comment.comment_content}</div>
-                              <div style={{ fontSize: '12px', color: '#65676B' }}>
+                              <div style={{ 
+                                fontWeight: 'bold', 
+                                fontSize: '14px',
+                                color: '#333'
+                              }}>{comment.username}</div>
+                              <div style={{ 
+                                fontSize: '14px',
+                                color: '#666',
+                                marginTop: '4px'
+                              }}>{comment.comment_content}</div>
+                              <div style={{ 
+                                fontSize: '12px',
+                                color: '#999',
+                                marginTop: '4px'
+                              }}>
                                 {new Date(comment.created_at).toLocaleString()}
                               </div>
                             </div>
@@ -500,20 +792,41 @@ const FeedContainer = () => {
                           </div>
                         ))}
 
-                        <div style={{ display: 'flex', alignItems: 'center', marginTop: '8px' }}>
-                          <IonAvatar style={{ width: '32px', height: '32px', marginRight: '8px' }}>
+                        <div style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          marginTop: '12px',
+                          padding: '12px',
+                          background: 'white',
+                          borderRadius: '8px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                        }}>
+                          <IonAvatar style={{ 
+                            width: '32px', 
+                            height: '32px',
+                            marginRight: '12px',
+                            border: '1px solid #3880ff'
+                          }}>
                             <img src={user?.user_metadata?.avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg'} alt={username || ''} />
                           </IonAvatar>
                           <IonInput
                             value={commentContent[post.post_id] || ''}
                             onIonChange={e => handleCommentChange(post.post_id, e.detail.value!)}
                             placeholder="Write a comment..."
-                            style={{ flex: 1, fontSize: '14px' }}
+                            style={{ 
+                              '--padding-start': '0',
+                              '--background': 'transparent',
+                              '--placeholder-color': '#999',
+                              '--color': '#333'
+                            }}
                           />
                           <IonButton 
                             fill="clear" 
                             onClick={() => addComment(post.post_id)}
                             disabled={!commentContent[post.post_id]?.trim()}
+                            style={{
+                              '--color': '#3880ff'
+                            }}
                           >
                             <IonIcon icon={send} />
                           </IonButton>
@@ -521,7 +834,7 @@ const FeedContainer = () => {
                       </div>
                     )}
                   </IonCardContent>
-  
+
                   <IonPopover
                     isOpen={popoverState.open && popoverState.postId === post.post_id}
                     event={popoverState.event}
@@ -557,7 +870,7 @@ const FeedContainer = () => {
           <IonLabel>Loading...</IonLabel>
         )}
       </IonContent>
-  
+
       <IonModal isOpen={isModalOpen} onDidDismiss={() => setIsModalOpen(false)}>
         <IonHeader>
           <IonToolbar>
@@ -576,7 +889,7 @@ const FeedContainer = () => {
           <IonButton onClick={() => setIsModalOpen(false)}>Cancel</IonButton>
         </IonFooter>
       </IonModal>
-  
+
       <IonAlert
         isOpen={isAlertOpen}
         onDidDismiss={() => setIsAlertOpen(false)}
@@ -584,6 +897,19 @@ const FeedContainer = () => {
         message="Post updated successfully!"
         buttons={['OK']}
       />
+
+      <IonModal isOpen={isImageModalOpen} onDidDismiss={() => setIsImageModalOpen(false)}>
+        <IonContent style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+          {viewImageUrl && (
+            <img
+              src={viewImageUrl}
+              alt="Full View"
+              style={{ maxWidth: '100vw', maxHeight: '100vh', margin: 'auto', display: 'block' }}
+              onClick={() => setIsImageModalOpen(false)}
+            />
+          )}
+        </IonContent>
+      </IonModal>
     </>
   );
 };
