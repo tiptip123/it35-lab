@@ -21,6 +21,7 @@ import Favorites from './home-tabs/Favorites';
 import Feed from './home-tabs/Feed';
 import Search from './home-tabs/ChatTab';
 import Profile from './home-tabs/Profile';
+import UserProfile from './home-tabs/UserProfile';
 
 const Home: React.FC = () => {
   const tabs = [
@@ -47,6 +48,7 @@ const Home: React.FC = () => {
           <Route exact path="/it35-lab/app/home/search" component={Search} />
           <Route exact path="/it35-lab/app/home/favorites" component={Favorites} />
           <Route exact path="/it35-lab/app/home/profile" component={Profile} />
+          <Route exact path="/it35-lab/app/home/user/:userId" component={UserProfile} />
           <Route exact path="/it35-lab/app/home">
             <Redirect to="/it35-lab/app/home/feed" />
           </Route>

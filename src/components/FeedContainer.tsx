@@ -3,6 +3,7 @@ import { IonApp, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, IonButton
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabaseClient';
 import { pencil, trash, chatbubbleOutline, send, camera } from 'ionicons/icons';
+import { useHistory } from 'react-router-dom';
 
 interface Post {
   post_id: string;
@@ -79,6 +80,7 @@ const FeedContainer = () => {
   const [userIntId, setUserIntId] = useState<number | null>(null);
   const [viewImageUrl, setViewImageUrl] = useState<string | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const history = useHistory();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -408,6 +410,10 @@ const FeedContainer = () => {
     }));
   };
 
+  const handleUsernameClick = (userId: number | string) => {
+    history.push(`/it35-lab/app/home/user/${userId}`);
+  };
+
   return (
     <>
       <IonContent style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e0e7ff 0%, #fbc2eb 100%)' }}>
@@ -527,11 +533,17 @@ const FeedContainer = () => {
                         </IonAvatar>
                       </IonCol>
                       <IonCol>
-                        <IonText style={{ 
-                          fontWeight: 'bold',
-                          fontSize: '16px',
-                          color: '#333'
-                        }}>{post.username}</IonText>
+                        <IonText 
+                          style={{ 
+                            fontWeight: 'bold',
+                            fontSize: '16px',
+                            color: '#333',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => handleUsernameClick(post.user_id)}
+                        >
+                          {post.username}
+                        </IonText>
                         <div style={{ 
                           fontSize: '12px',
                           color: '#666',
@@ -583,7 +595,16 @@ const FeedContainer = () => {
                       color: '#333'
                     }}>
                       <IonText style={{ whiteSpace: 'pre-wrap' }}>
-                        <span style={{ fontWeight: 'bold', marginRight: '4px' }}>{post.username}</span>
+                        <span 
+                          style={{ 
+                            fontWeight: 'bold', 
+                            marginRight: '4px',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => handleUsernameClick(post.user_id)}
+                        >
+                          {post.username}
+                        </span>
                         {post.post_content}
                       </IonText>
                     </div>
@@ -761,11 +782,17 @@ const FeedContainer = () => {
                               <img src={comment.avatar_url} alt={comment.username} />
                             </IonAvatar>
                             <div style={{ flex: 1 }}>
-                              <div style={{ 
-                                fontWeight: 'bold', 
-                                fontSize: '14px',
-                                color: '#333'
-                              }}>{comment.username}</div>
+                              <div 
+                                style={{ 
+                                  fontWeight: 'bold', 
+                                  fontSize: '14px',
+                                  color: '#333',
+                                  cursor: 'pointer'
+                                }}
+                                onClick={() => handleUsernameClick(comment.user_id)}
+                              >
+                                {comment.username}
+                              </div>
                               <div style={{ 
                                 fontSize: '14px',
                                 color: '#666',

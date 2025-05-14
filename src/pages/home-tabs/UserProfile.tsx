@@ -1,5 +1,6 @@
-import { IonContent, IonPage, IonHeader, IonToolbar, IonTitle, IonAvatar, IonText, IonGrid, IonRow, IonCol, IonInput, IonButton, IonCard, IonCardContent, IonCardHeader, IonLabel, IonModal, IonIcon } from '@ionic/react';
+import { IonContent, IonPage, IonHeader, IonToolbar, IonTitle, IonAvatar, IonText, IonGrid, IonRow, IonCol, IonButton, IonCard, IonCardContent, IonCardHeader, IonLabel, IonModal, IonIcon, IonInput } from '@ionic/react';
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../../utils/supabaseClient';
 import { chevronBack, chevronForward, pencil, trash, chatbubbleOutline, send } from 'ionicons/icons';
 
@@ -13,19 +14,11 @@ const REACTION_EMOJIS = {
   angry: '😡'
 };
 
-const Profile: React.FC = () => {
-  const [user, setUser] = useState<any>(null);
+const UserProfile: React.FC = () => {
+  const { userId } = useParams<{ userId: string }>();
   const [userInfo, setUserInfo] = useState<any>(null);
-  const [bio, setBio] = useState('');
-  const [bioEdit, setBioEdit] = useState('');
-  const [editingBio, setEditingBio] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
   const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
-  // Album modal state
-  const [albumModalOpen, setAlbumModalOpen] = useState(false);
-  const [albumPhotoIdx, setAlbumPhotoIdx] = useState(0);
-  // Reactions/comments state
   const [reactions, setReactions] = useState<Record<string, any[]>>({});
   const [userReactions, setUserReactions] = useState<Record<string, string>>({});
   const [showReactionPicker, setShowReactionPicker] = useState<{postId: string | null, show: boolean}>({postId: null, show: false});
@@ -36,27 +29,32 @@ const Profile: React.FC = () => {
   const [reactionUsers, setReactionUsers] = useState<Record<string, any[]>>({});
   const [viewImageUrl, setViewImageUrl] = useState<string | null>(null);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     const fetchUserAndPosts = async () => {
+      // Fetch current user
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData?.user) return;
-      setUser(authData.user);
-      console.log('Auth user:', authData.user); // Debug log
-      
-      // Fetch user info by email
+      if (authData?.user) {
+        const { data: currentUserData } = await supabase
+          .from('users')
+          .select('user_id')
+          .eq('user_email', authData.user.email)
+          .single();
+        setCurrentUser(currentUserData);
+      }
+
+      // Fetch target user info
       const { data: userData } = await supabase
         .from('users')
         .select('user_id, username, user_firstname, user_lastname, user_avatar_url, cover_photo_url, user_email')
-        .eq('user_email', authData.user.email)
+        .eq('user_id', userId)
         .single();
       
-      console.log('User data:', userData); // Debug log
       setUserInfo(userData);
       setCoverPhoto(userData?.cover_photo_url || null);
-      setBio('');
-      setBioEdit('');
-      // Fetch posts by user_id (integer)
+
+      // Fetch posts by user_id
       if (userData?.user_id) {
         const { data: userPosts } = await supabase
           .from('posts')
@@ -67,6 +65,50 @@ const Profile: React.FC = () => {
       }
     };
 
+    fetchUserAndPosts();
+  }, [userId]);
+
+  // Fetch reactions/comments for user's posts
+  useEffect(() => {
+    if (!posts.length) return;
+    const fetchReactions = async () => {
+      const { data, error } = await supabase.from('reactions').select('*');
+      if (!error) {
+        const reactionsMap: Record<string, any[]> = {};
+        const userReactionsMap: Record<string, string> = {};
+        data.forEach(reaction => {
+          const postId = reaction.post_id;
+          if (!reactionsMap[postId]) reactionsMap[postId] = [];
+          reactionsMap[postId].push(reaction);
+          if (currentUser && reaction.user_id === currentUser.user_id) {
+            userReactionsMap[postId] = reaction.reaction_type;
+          }
+        });
+        setReactions(reactionsMap);
+        setUserReactions(userReactionsMap);
+      }
+    };
+
+    const fetchComments = async () => {
+      const { data, error } = await supabase.from('comments').select('*').order('created_at', { ascending: true });
+      if (!error) {
+        const commentsMap: Record<string, any[]> = {};
+        data.forEach(comment => {
+          const postId = comment.post_id;
+          if (!commentsMap[postId]) commentsMap[postId] = [];
+          commentsMap[postId].push(comment);
+        });
+        setComments(commentsMap);
+      }
+    };
+
+    fetchReactions();
+    fetchComments();
+  }, [posts, currentUser]);
+
+  // Add this new useEffect for fetching reaction users
+  useEffect(() => {
+    if (!posts.length) return;
     const fetchReactionUsers = async () => {
       const { data, error } = await supabase
         .from('reactions')
@@ -102,67 +144,9 @@ const Profile: React.FC = () => {
       }
     };
 
-    fetchUserAndPosts();
     fetchReactionUsers();
-  }, []);
+  }, [posts]);
 
-  // Save bio (local state, but show how to persist)
-  const saveBio = async () => {
-    setBio(bioEdit);
-    setEditingBio(false);
-    // Uncomment below to persist to DB if you add a 'bio' column to users table
-    // await supabase.from('users').update({ bio: bioEdit }).eq('user_id', userInfo.user_id);
-  };
-
-  // Album: all post images
-  const albumPhotos = posts.filter(p => p.post_image_url);
-
-  // Album modal navigation
-  const openAlbumModal = (idx: number) => {
-    setAlbumPhotoIdx(idx);
-    setAlbumModalOpen(true);
-  };
-  const closeAlbumModal = () => setAlbumModalOpen(false);
-  const prevPhoto = () => setAlbumPhotoIdx(idx => (idx > 0 ? idx - 1 : albumPhotos.length - 1));
-  const nextPhoto = () => setAlbumPhotoIdx(idx => (idx < albumPhotos.length - 1 ? idx + 1 : 0));
-
-  // Fetch reactions/comments for user's posts
-  useEffect(() => {
-    if (!posts.length) return;
-    const fetchReactions = async () => {
-      const { data, error } = await supabase.from('reactions').select('*');
-      if (!error) {
-        const reactionsMap: Record<string, any[]> = {};
-        const userReactionsMap: Record<string, string> = {};
-        data.forEach(reaction => {
-          const postId = reaction.post_id;
-          if (!reactionsMap[postId]) reactionsMap[postId] = [];
-          reactionsMap[postId].push(reaction);
-          if (userInfo && reaction.user_id === userInfo.user_id) {
-            userReactionsMap[postId] = reaction.reaction_type;
-          }
-        });
-        setReactions(reactionsMap);
-        setUserReactions(userReactionsMap);
-      }
-    };
-    const fetchComments = async () => {
-      const { data, error } = await supabase.from('comments').select('*').order('created_at', { ascending: true });
-      if (!error) {
-        const commentsMap: Record<string, any[]> = {};
-        data.forEach(comment => {
-          const postId = comment.post_id;
-          if (!commentsMap[postId]) commentsMap[postId] = [];
-          commentsMap[postId].push(comment);
-        });
-        setComments(commentsMap);
-      }
-    };
-    fetchReactions();
-    fetchComments();
-  }, [posts, userInfo]);
-
-  // Reaction handlers
   const getReactionSummary = (postId: string) => {
     if (!reactions[postId] || reactions[postId].length === 0) return null;
     const counts: Record<string, number> = {};
@@ -173,29 +157,30 @@ const Profile: React.FC = () => {
     const topReaction = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
     return {
       total,
-      topReaction: topReaction ? topReaction[0] : null,
+      topReaction: topReaction ? REACTION_EMOJIS[topReaction[0] as keyof typeof REACTION_EMOJIS] : null,
       topCount: topReaction ? topReaction[1] : 0
     };
   };
+
   const handleReaction = async (postId: string, reactionType: string) => {
-    if (!userInfo) return;
-    const existingReaction = reactions[postId]?.find(r => r.user_id === userInfo.user_id);
+    if (!currentUser) return;
+    const existingReaction = reactions[postId]?.find(r => r.user_id === currentUser.user_id);
     const isSameReaction = existingReaction?.reaction_type === reactionType;
     const updatedReactions = { ...reactions };
     const updatedUserReactions = { ...userReactions };
     if (isSameReaction) {
-      updatedReactions[postId] = updatedReactions[postId]?.filter(r => r.user_id !== userInfo.user_id) || [];
+      updatedReactions[postId] = updatedReactions[postId]?.filter(r => r.user_id !== currentUser.user_id) || [];
       delete updatedUserReactions[postId];
     } else {
       const newReaction = {
         id: `temp-${Date.now()}`,
         post_id: postId,
-        user_id: userInfo.user_id,
+        user_id: currentUser.user_id,
         reaction_type: reactionType,
         created_at: new Date().toISOString()
       };
       updatedReactions[postId] = [
-        ...(updatedReactions[postId]?.filter(r => r.user_id !== userInfo.user_id) || []),
+        ...(updatedReactions[postId]?.filter(r => r.user_id !== currentUser.user_id) || []),
         newReaction
       ];
       updatedUserReactions[postId] = reactionType;
@@ -203,25 +188,27 @@ const Profile: React.FC = () => {
     setReactions(updatedReactions);
     setUserReactions(updatedUserReactions);
     if (isSameReaction) {
-      await supabase.from('reactions').delete().eq('post_id', postId).eq('user_id', userInfo.user_id);
+      await supabase.from('reactions').delete().eq('post_id', postId).eq('user_id', currentUser.user_id);
     } else {
       await supabase.from('reactions').upsert({
         post_id: postId,
-        user_id: userInfo.user_id,
+        user_id: currentUser.user_id,
         reaction_type: reactionType
       }, { onConflict: 'post_id,user_id' });
     }
     setShowReactionPicker({ postId: null, show: false });
   };
+
   const toggleComments = (postId: string) => {
     setExpandedComments(prev => ({ ...prev, [postId]: !prev[postId] }));
   };
+
   const addComment = async (postId: string) => {
-    if (!userInfo || !commentContent[postId]?.trim()) return;
+    if (!currentUser || !commentContent[postId]?.trim()) return;
     const { data: userData, error: userError } = await supabase
       .from('users')
-      .select('user_avatar_url')
-      .eq('user_id', userInfo.user_id)
+      .select('user_avatar_url, username')
+      .eq('user_id', currentUser.user_id)
       .single();
     if (userError) return;
     const avatarUrl = userData?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg';
@@ -229,8 +216,8 @@ const Profile: React.FC = () => {
       .from('comments')
       .insert([{
         post_id: postId,
-        user_id: userInfo.user_id,
-        username: userInfo.username,
+        user_id: currentUser.user_id,
+        username: userData.username,
         avatar_url: avatarUrl,
         comment_content: commentContent[postId]
       }])
@@ -241,85 +228,24 @@ const Profile: React.FC = () => {
       setCommentContent(prev => ({ ...prev, [postId]: '' }));
     }
   };
+
   const deleteComment = async (commentId: string, postId: string) => {
     await supabase.from('comments').delete().match({ comment_id: commentId });
     setComments(prev => ({ ...prev, [postId]: prev[postId].filter(comment => comment.comment_id !== commentId) }));
   };
+
   const handleCommentChange = (postId: string, content: string) => {
     setCommentContent(prev => ({ ...prev, [postId]: content }));
   };
-
-  const handleCoverPhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    console.log('File selected:', file); // Debug log
-    if (!file || !userInfo) return;
-
-    setIsUploadingCover(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `cover_${userInfo.user_id}_${Date.now()}.${fileExt}`;
-      console.log('Uploading file:', fileName); // Debug log
-      
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('cover-photos')
-        .upload(fileName, file);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError); // Debug log
-        throw uploadError;
-      }
-
-      console.log('Upload successful:', uploadData); // Debug log
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('cover-photos')
-        .getPublicUrl(fileName);
-
-      console.log('Public URL:', publicUrl); // Debug log
-
-      // Update user's cover photo URL in database
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ cover_photo_url: publicUrl })
-        .eq('user_id', userInfo.user_id);
-
-      if (updateError) {
-        console.error('Update error:', updateError); // Debug log
-        throw updateError;
-      }
-
-      console.log('Database updated successfully'); // Debug log
-      setCoverPhoto(publicUrl);
-    } catch (error) {
-      console.error('Error uploading cover photo:', error);
-    } finally {
-      setIsUploadingCover(false);
-    }
-  };
-
-  // Add debug logging for the edit button condition
-  const showEditButton = userInfo && user?.email === userInfo.user_email;
-  console.log('Show edit button:', showEditButton, { userEmail: user?.email, userInfoEmail: userInfo?.user_email }); // Debug log
 
   return (
     <IonPage>
       <IonHeader>
         <IonToolbar>
-          <IonTitle>Profile</IonTitle>
+          <IonTitle>{userInfo?.username || 'Profile'}</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent fullscreen>
-        {/* Place the file input at the top level, hidden */}
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleCoverPhotoUpload}
-          style={{ display: 'none' }}
-          id="cover-photo-upload"
-          disabled={isUploadingCover}
-        />
         {/* Cover Photo Section */}
         <div style={{ 
           position: 'relative',
@@ -357,41 +283,6 @@ const Profile: React.FC = () => {
               <IonText color="medium">No cover photo</IonText>
             </div>
           )}
-          
-          {/* Edit Cover Photo Button (only show for profile owner) */}
-          {showEditButton && (
-            <div style={{ 
-              position: 'absolute', 
-              bottom: '16px', 
-              right: '16px',
-              zIndex: 2,
-              display: 'flex',
-              gap: '8px',
-              pointerEvents: 'auto'
-            }}>
-              <label
-                htmlFor="cover-photo-upload"
-                style={{
-                  cursor: isUploadingCover ? 'not-allowed' : 'pointer',
-                  padding: '8px 16px',
-                  background: 'rgba(255, 255, 255, 0.9)',
-                  color: '#333',
-                  borderRadius: '20px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  userSelect: 'none',
-                  opacity: isUploadingCover ? 0.7 : 1,
-                  pointerEvents: isUploadingCover ? 'none' : 'auto',
-                  fontWeight: 500
-                }}
-              >
-                <IonIcon icon={pencil} />
-                {isUploadingCover ? 'Uploading...' : 'Edit Cover Photo'}
-              </label>
-            </div>
-          )}
         </div>
 
         {/* Profile Info Section */}
@@ -422,76 +313,9 @@ const Profile: React.FC = () => {
             <img src={userInfo?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg'} alt="Profile" />
           </IonAvatar>
           <IonText color="primary" style={{ marginTop: 16, fontSize: 24 }}>
-            <h2>{userInfo ? userInfo.username : 'Your Name'}</h2>
+            <h2>{userInfo ? userInfo.username : 'Loading...'}</h2>
           </IonText>
-          {/* Editable BIO */}
-          <div style={{ marginTop: 12, width: 300, textAlign: 'center' }}>
-            {editingBio ? (
-              <>
-                <IonInput
-                  value={bioEdit}
-                  onIonChange={e => setBioEdit(e.detail.value!)}
-                  placeholder="Enter your bio..."
-                  style={{ marginBottom: 8 }}
-                />
-                <IonButton size="small" onClick={saveBio}>Save</IonButton>
-                <IonButton size="small" color="medium" onClick={() => setEditingBio(false)}>Cancel</IonButton>
-              </>
-            ) : (
-              <>
-                <IonText color="medium">{bio || <i>No bio yet.</i>}</IonText>
-                <IonButton size="small" fill="clear" onClick={() => setEditingBio(true)} style={{ marginLeft: 8 }}>Edit Bio</IonButton>
-              </>
-            )}
-          </div>
-          {!userInfo && (
-            <IonText color="danger" style={{ marginTop: 32 }}>
-              <h3>No user found for your email. Please check your users table and ensure your user_email matches your login email.</h3>
-            </IonText>
-          )}
         </div>
-
-        {/* Album Grid */}
-        <div style={{ margin: '32px 0 0 0', padding: '0 16px' }}>
-          <IonLabel color="primary" style={{ fontWeight: 'bold', fontSize: 18 }}>Photo Album</IonLabel>
-          <IonGrid>
-            <IonRow>
-              {albumPhotos.length === 0 && <IonCol size="12"><IonText color="medium">No photos yet.</IonText></IonCol>}
-              {albumPhotos.map((photo, idx) => (
-                <IonCol size="4" key={idx} style={{ padding: 6 }}>
-                  <img
-                    src={photo.post_image_url}
-                    alt="Album"
-                    style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', cursor: 'pointer' }}
-                    onClick={() => {
-                      setViewImageUrl(photo.post_image_url);
-                      setIsImageModalOpen(true);
-                    }}
-                  />
-                </IonCol>
-              ))}
-            </IonRow>
-          </IonGrid>
-        </div>
-        {/* Album Modal */}
-        <IonModal isOpen={albumModalOpen} onDidDismiss={closeAlbumModal}>
-          <IonContent style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
-            {albumPhotos.length > 0 && (
-              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <img
-                  src={albumPhotos[albumPhotoIdx].post_image_url}
-                  alt="Full Album"
-                  style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 12, marginBottom: 16 }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 24 }}>
-                  <IonButton fill="clear" onClick={prevPhoto}><IonIcon icon={chevronBack} /></IonButton>
-                  <IonButton fill="clear" onClick={closeAlbumModal}>Close</IonButton>
-                  <IonButton fill="clear" onClick={nextPhoto}><IonIcon icon={chevronForward} /></IonButton>
-                </div>
-              </div>
-            )}
-          </IonContent>
-        </IonModal>
 
         {/* Timeline */}
         <div style={{ margin: '32px 0', padding: '0 16px' }}>
@@ -587,43 +411,43 @@ const Profile: React.FC = () => {
                         {getReactionSummary(post.post_id)?.total} {getReactionSummary(post.post_id)?.total === 1 ? 'reaction' : 'reactions'}
                       </IonText>
                     </div>
+                  </div>
+                )}
 
-                    {hoveredReactions.postId === post.post_id && hoveredReactions.show && reactionUsers[post.post_id] && (
-                      <div style={{
-                        position: 'absolute',
-                        bottom: '100%',
-                        left: '0',
-                        backgroundColor: 'white',
-                        borderRadius: '8px',
-                        padding: '12px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                        zIndex: 1000,
-                        minWidth: '200px',
-                        maxWidth: '300px'
+                {hoveredReactions.postId === post.post_id && hoveredReactions.show && reactionUsers[post.post_id] && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: '0',
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    zIndex: 1000,
+                    minWidth: '200px',
+                    maxWidth: '300px'
+                  }}>
+                    <div style={{ 
+                      fontSize: '14px', 
+                      fontWeight: 'bold',
+                      marginBottom: '8px',
+                      color: '#333'
+                    }}>
+                      Reactions
+                    </div>
+                    {reactionUsers[post.post_id].map((userReaction, index) => (
+                      <div key={index} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        marginBottom: '4px',
+                        fontSize: '14px'
                       }}>
-                        <div style={{ 
-                          fontSize: '14px', 
-                          fontWeight: 'bold',
-                          marginBottom: '8px',
-                          color: '#333'
-                        }}>
-                          Reactions
-                        </div>
-                        {reactionUsers[post.post_id].map((userReaction, index) => (
-                          <div key={index} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            marginBottom: '4px',
-                            fontSize: '14px'
-                          }}>
-                            <span style={{ marginRight: '8px' }}>
-                              {REACTION_EMOJIS[userReaction.reaction_type as keyof typeof REACTION_EMOJIS]}
-                            </span>
-                            <span style={{ color: '#666' }}>{userReaction.username}</span>
-                          </div>
-                        ))}
+                        <span style={{ marginRight: '8px' }}>
+                          {REACTION_EMOJIS[userReaction.reaction_type as keyof typeof REACTION_EMOJIS]}
+                        </span>
+                        <span style={{ color: '#666' }}>{userReaction.username}</span>
                       </div>
-                    )}
+                    ))}
                   </div>
                 )}
 
@@ -754,7 +578,7 @@ const Profile: React.FC = () => {
                             {new Date(comment.created_at).toLocaleString()}
                           </div>
                         </div>
-                        {userInfo?.user_id === comment.user_id && (
+                        {currentUser?.user_id === comment.user_id && (
                           <IonButton 
                             fill="clear" 
                             size="small" 
@@ -782,7 +606,7 @@ const Profile: React.FC = () => {
                         marginRight: '12px',
                         border: '1px solid #3880ff'
                       }}>
-                        <img src={userInfo?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg'} alt={userInfo?.username || ''} />
+                        <img src={currentUser?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg'} alt={currentUser?.username || ''} />
                       </IonAvatar>
                       <IonInput
                         value={commentContent[post.post_id] || ''}
@@ -837,4 +661,4 @@ const Profile: React.FC = () => {
   );
 };
 
-export default Profile; 
+export default UserProfile; 
