@@ -451,45 +451,113 @@ const Profile: React.FC = () => {
           )}
         </div>
 
-        {/* Album Grid */}
-        <div style={{ margin: '32px 0 0 0', padding: '0 16px' }}>
-          <IonLabel color="primary" style={{ fontWeight: 'bold', fontSize: 18 }}>Photo Album</IonLabel>
+        {/* Photos Card */}
+        <div style={{ margin: '32px 0', padding: '0 16px' }}>
+          <IonLabel color="primary" style={{ fontWeight: 'bold', fontSize: 18 }}>Photos</IonLabel>
           <IonGrid>
             <IonRow>
-              {albumPhotos.length === 0 && <IonCol size="12"><IonText color="medium">No photos yet.</IonText></IonCol>}
-              {albumPhotos.map((photo, idx) => (
-                <IonCol size="4" key={idx} style={{ padding: 6 }}>
-                  <img
-                    src={photo.post_image_url}
-                    alt="Album"
-                    style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', cursor: 'pointer' }}
-                    onClick={() => {
-                      setViewImageUrl(photo.post_image_url);
-                      setIsImageModalOpen(true);
-                    }}
-                  />
-                </IonCol>
-              ))}
+              <IonCol size="4">
+                <div
+                  style={{
+                    background: '#222',
+                    borderRadius: 12,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 160,
+                    position: 'relative',
+                    overflow: 'hidden',
+                  }}
+                  onClick={() => setAlbumModalOpen(true)}
+                >
+                  {albumPhotos[0] ? (
+                    <img
+                      src={albumPhotos[0].post_image_url}
+                      alt="All Photos"
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        borderRadius: 12,
+                        opacity: 0.7,
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                      }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+                      No photos
+                    </div>
+                  )}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.6)',
+                    color: '#fff',
+                    padding: '12px',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    fontSize: 16,
+                    borderBottomLeftRadius: 12,
+                    borderBottomRightRadius: 12,
+                  }}>
+                    All Photos<br />
+                    <span style={{ fontWeight: 'normal', fontSize: 13 }}>{albumPhotos.length} item{albumPhotos.length !== 1 ? 's' : ''}</span>
+                  </div>
+                </div>
+              </IonCol>
             </IonRow>
           </IonGrid>
         </div>
-        {/* Album Modal */}
+
+        {/* Photos Modal: shows all photos in a grid */}
         <IonModal isOpen={albumModalOpen} onDidDismiss={closeAlbumModal}>
-          <IonContent style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
-            {albumPhotos.length > 0 && (
-              <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <img
-                  src={albumPhotos[albumPhotoIdx].post_image_url}
-                  alt="Full Album"
-                  style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 12, marginBottom: 16 }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 24 }}>
-                  <IonButton fill="clear" onClick={prevPhoto}><IonIcon icon={chevronBack} /></IonButton>
-                  <IonButton fill="clear" onClick={closeAlbumModal}>Close</IonButton>
-                  <IonButton fill="clear" onClick={nextPhoto}><IonIcon icon={chevronForward} /></IonButton>
-                </div>
-              </div>
-            )}
+          <IonHeader>
+            <IonToolbar color="dark">
+              <IonTitle>All Photos</IonTitle>
+              <IonButton slot="end" fill="clear" color="light" onClick={closeAlbumModal}>Close</IonButton>
+            </IonToolbar>
+          </IonHeader>
+          <IonContent style={{ background: '#18191a' }}>
+            <IonGrid>
+              <IonRow>
+                {albumPhotos.length === 0 && <IonCol size="12"><IonText color="medium">No photos yet.</IonText></IonCol>}
+                {albumPhotos.map((photo, idx) => (
+                  <IonCol size="4" key={idx} style={{ padding: 6 }}>
+                    <img
+                      src={photo.post_image_url}
+                      alt="Album"
+                      style={{
+                        width: '100%',
+                        height: 120,
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s ease-in-out',
+                      }}
+                      onClick={() => {
+                        setAlbumPhotoIdx(idx);
+                        setViewImageUrl(photo.post_image_url);
+                        setIsImageModalOpen(true);
+                      }}
+                      onMouseOver={e => {
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                      }}
+                      onMouseOut={e => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }}
+                    />
+                  </IonCol>
+                ))}
+              </IonRow>
+            </IonGrid>
           </IonContent>
         </IonModal>
 
@@ -813,7 +881,7 @@ const Profile: React.FC = () => {
           ))}
         </div>
 
-        {/* Image Modal */}
+        {/* Image Modal for full screen preview */}
         <IonModal isOpen={isImageModalOpen} onDidDismiss={() => setIsImageModalOpen(false)}>
           <IonContent style={{ background: '#000', padding: 0, overflow: 'auto' }}>
             {viewImageUrl && (
@@ -825,7 +893,10 @@ const Profile: React.FC = () => {
                   background: 'transparent',
                   border: 0,
                   padding: 0,
-                  margin: '0 auto'
+                  margin: '0 auto',
+                  maxWidth: '100%',
+                  maxHeight: '100vh',
+                  objectFit: 'contain',
                 }}
                 onClick={() => setIsImageModalOpen(false)}
               />
