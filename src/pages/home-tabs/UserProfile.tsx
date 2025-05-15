@@ -1,8 +1,9 @@
 import { IonContent, IonPage, IonHeader, IonToolbar, IonTitle, IonAvatar, IonText, IonGrid, IonRow, IonCol, IonButton, IonCard, IonCardContent, IonCardHeader, IonLabel, IonModal, IonIcon, IonInput } from '@ionic/react';
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useHistory } from 'react-router-dom';
 import { supabase } from '../../utils/supabaseClient';
 import { chevronBack, chevronForward, pencil, trash, chatbubbleOutline, send } from 'ionicons/icons';
+import ChatPopup from '../../components/ChatPopup';
 
 const REACTION_TYPES = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
 const REACTION_EMOJIS = {
@@ -16,6 +17,7 @@ const REACTION_EMOJIS = {
 
 const UserProfile: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
+  const history = useHistory();
   const [userInfo, setUserInfo] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
@@ -32,6 +34,7 @@ const UserProfile: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [albumModalOpen, setAlbumModalOpen] = useState(false);
   const [albumPhotoIdx, setAlbumPhotoIdx] = useState(0);
+  const [showChatPopup, setShowChatPopup] = useState(false);
 
   useEffect(() => {
     const fetchUserAndPosts = async () => {
@@ -316,7 +319,8 @@ const UserProfile: React.FC = () => {
               height: 120,
               border: '4px solid white',
               boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              marginBottom: 8
             }}
             onClick={() => {
               if (userInfo?.user_avatar_url) {
@@ -327,10 +331,27 @@ const UserProfile: React.FC = () => {
           >
             <img src={userInfo?.user_avatar_url || 'https://ionicframework.com/docs/img/demos/avatar.svg'} alt="Profile" />
           </IonAvatar>
-          <IonText color="primary" style={{ marginTop: 16, fontSize: 24 }}>
-            <h2>{userInfo ? userInfo.username : 'Loading...'}</h2>
+          <IonText color="primary" style={{ marginTop: 16, fontSize: 28, fontWeight: 700 }}>
+            <h2 style={{ margin: 0 }}>{userInfo ? userInfo.username : 'Loading...'}</h2>
           </IonText>
+          {/* Only Message Button */}
+          <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+            <IonButton color="primary" style={{ fontWeight: 600, borderRadius: 8 }}
+              onClick={() => setShowChatPopup(true)}>
+              Message
+            </IonButton>
+          </div>
         </div>
+
+        {/* Chat Popup */}
+        {showChatPopup && userInfo && (
+          <ChatPopup
+            userId={userInfo.user_id}
+            username={userInfo.username}
+            avatarUrl={userInfo.user_avatar_url}
+            onClose={() => setShowChatPopup(false)}
+          />
+        )}
 
         {/* Album Card */}
         <div style={{ margin: '32px 0', padding: '0 16px' }}>
