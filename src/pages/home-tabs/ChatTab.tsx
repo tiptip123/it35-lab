@@ -65,6 +65,7 @@ const ChatTab: React.FC = () => {
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
   const [activeChatUserId, setActiveChatUserId] = useState<number | null>(null);
   const [userIdToName, setUserIdToName] = useState<Record<number, string>>({});
+  const [lastMessages, setLastMessages] = useState<Record<string, string>>({});
 
   // Keep your existing contact fetching logic
   useEffect(() => {
@@ -109,6 +110,22 @@ const ChatTab: React.FC = () => {
         setUserIdToName(userMap);
 
         setUsers(formattedUsers);
+
+        // Fetch last message for each user
+        for (const u of formattedUsers) {
+          const { data, error } = await supabase
+            .from('messages')
+            .select('content')
+            .or(
+              `and(sender_id.eq.${currentUserId},receiver_id.eq.${u.id}),` +
+              `and(sender_id.eq.${u.id},receiver_id.eq.${currentUserId})`
+            )
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (!error && data && data[0]) {
+            setLastMessages(prev => ({ ...prev, [u.id]: data[0].content }));
+          }
+        }
       } catch (err) {
         console.error('Error fetching users:', err);
       }
@@ -236,275 +253,163 @@ const ChatTab: React.FC = () => {
     <IonPage>
       <IonHeader>
         <IonToolbar color="primary">
-          <IonButtons slot="start">
-            <IonMenuButton />
-          </IonButtons>
           <IonTitle>Messages</IonTitle>
         </IonToolbar>
-        <IonToolbar color="primary">
-          <IonSearchbar
-            placeholder="Search contacts..."
-            value={searchText}
-            onIonChange={e => setSearchText(e.detail.value ?? '')}
-          />
-        </IonToolbar>
       </IonHeader>
-
-      <IonContent fullscreen>
-        <IonList lines="full" className="ion-no-padding">
-          {filteredUsers.length === 0 ? (
-            <IonItem>
-              <IonLabel>No users available</IonLabel>
-            </IonItem>
-          ) : (
-            filteredUsers.map(user => (
-              <IonItem key={user.id} button detail onClick={() => openChat(user)}>
-                <IonAvatar slot="start" style={{ position: 'relative' }}>
-                  {user.avatar_url ? (
-                    <img src={user.avatar_url} alt={user.username} />
-                  ) : (
-                    <IonIcon icon={personCircleOutline} style={{ fontSize: '40px' }} />
-                  )}
-                  {user.online && (
-                    <div className="online-badge"></div>
-                  )}
-                </IonAvatar>
-                <IonLabel>
-                  <h2>{user.username}</h2>
-                  <p className={user.online ? 'online-status' : 'offline-status'}>
-                    {user.online ? 'Online' : 'Offline'}
-                  </p>
-                </IonLabel>
-                {!user.online && user.last_online && (
-                  <IonBadge slot="end" color="medium" className="last-seen">
-                    Last seen:{' '}
-                    {new Date(user.last_online).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </IonBadge>
-                )}
-              </IonItem>
-            ))
-          )}
-        </IonList>
-
-        {/* Enhanced Chat Popup */}
-        {isChatOpen && activeChatUser && (
-          <div className="chat-popup">
-            <div className="chat-header">
-              <div className="header-content">
-                <IonAvatar className="chat-avatar">
-                  {activeChatUser.avatar_url ? (
-                    <img src={activeChatUser.avatar_url} alt={activeChatUser.username} />
-                  ) : (
-                    <IonIcon icon={personCircleOutline} />
-                  )}
-                </IonAvatar>
-                <div className="chat-info">
-                  <h3>{activeChatUser.username}</h3>
-                  <p className={activeChatUser.online ? 'online-status' : 'offline-status'}>
-                    {activeChatUser.online ? 'Online' : 'Offline'}
-                  </p>
-                </div>
-              </div>
-              <IonButton 
-                onClick={() => setIsChatOpen(false)} 
-                fill="clear"
-                className="close-button"
-              >
-                <IonIcon icon={close} />
-              </IonButton>
+      <IonContent fullscreen style={{ padding: 0 }}>
+        <div style={{ display: 'flex', height: '100vh', background: '#18191a' }}>
+          {/* Sidebar: Chat List */}
+          <div style={{ width: 340, background: '#242526', borderRight: '1px solid #393a3b', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: 16, borderBottom: '1px solid #393a3b' }}>
+              <IonSearchbar
+                placeholder="Search Messenger..."
+                value={searchText}
+                onIonChange={e => setSearchText(e.detail.value ?? '')}
+                style={{ background: '#3a3b3c', color: '#fff', borderRadius: 8 }}
+                inputmode="search"
+              />
             </div>
-            
-            <div className="chat-messages">
-              {messages.length === 0 ? (
-                <div className="no-messages">
-                  <IonText color="medium">No messages yet</IonText>
-                </div>
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {filteredUsers.length === 0 ? (
+                <div style={{ color: '#aaa', textAlign: 'center', marginTop: 32 }}>No users available</div>
               ) : (
-                messages.map((msg, index) => (
-                  <div 
-                    key={index} 
-                    className={`message-bubble ${msg.isCurrentUser ? 'sent' : 'received'}`}
+                filteredUsers.map(user => (
+                  <div
+                    key={user.id}
+                    onClick={() => openChat(user)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '12px 16px',
+                      background: activeChatUser && activeChatUser.id === user.id ? '#393a3b' : 'transparent',
+                      cursor: 'pointer',
+                      borderLeft: activeChatUser && activeChatUser.id === user.id ? '4px solid #0084ff' : '4px solid transparent',
+                      transition: 'background 0.2s',
+                    }}
                   >
-                    <div className="message-sender">{msg.user}</div>
-                    <div className="message-content">{msg.message}</div>
+                    <IonAvatar style={{ position: 'relative', width: 48, height: 48, marginRight: 16 }}>
+                      {user.avatar_url ? (
+                        <img src={user.avatar_url} alt={user.username} />
+                      ) : (
+                        <IonIcon icon={personCircleOutline} style={{ fontSize: '40px', color: '#888' }} />
+                      )}
+                      {user.online && (
+                        <div style={{
+                          position: 'absolute',
+                          bottom: 2,
+                          right: 2,
+                          width: 12,
+                          height: 12,
+                          backgroundColor: '#31A24C',
+                          borderRadius: '50%',
+                          border: '2px solid #242526',
+                        }}></div>
+                      )}
+                    </IonAvatar>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: '#fff', fontWeight: 500, fontSize: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.username}</div>
+                      <div style={{ color: '#aaa', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lastMessages[user.id] || 'No messages yet'}</div>
+                    </div>
+                    {user.online && <span style={{ color: '#31A24C', fontSize: 12, marginLeft: 8 }}>●</span>}
                   </div>
                 ))
               )}
-              <div ref={messagesEndRef} />
-            </div>
-            
-            <div className="chat-input">
-              <IonInput
-                value={message}
-                placeholder="Type a message"
-                onIonChange={e => setMessage(e.detail.value ?? '')}
-                onKeyPress={handleKeyPress}
-                className="message-input"
-              />
-              <IonButton 
-                onClick={sendMessage} 
-                color="primary"
-                className="send-button"
-                disabled={!message.trim()}
-              >
-                <IonIcon icon={send} />
-              </IonButton>
             </div>
           </div>
-        )}
+
+          {/* Main Chat Area */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#18191a' }}>
+            {/* Chat Header */}
+            <div style={{ height: 64, background: '#242526', borderBottom: '1px solid #393a3b', display: 'flex', alignItems: 'center', padding: '0 24px' }}>
+              {activeChatUser ? (
+                <>
+                  <IonAvatar style={{ width: 40, height: 40, marginRight: 16 }}>
+                    {activeChatUser.avatar_url ? (
+                      <img src={activeChatUser.avatar_url} alt={activeChatUser.username} />
+                    ) : (
+                      <IonIcon icon={personCircleOutline} style={{ fontSize: '32px', color: '#888' }} />
+                    )}
+                  </IonAvatar>
+                  <div>
+                    <div style={{ color: '#fff', fontWeight: 500, fontSize: 17 }}>{activeChatUser.username}</div>
+                    <div style={{ color: activeChatUser.online ? '#31A24C' : '#aaa', fontSize: 13 }}>{activeChatUser.online ? 'Active now' : 'Offline'}</div>
+                  </div>
+                </>
+              ) : (
+                <div style={{ color: '#aaa', fontSize: 18 }}>Select a chat to start messaging</div>
+              )}
+            </div>
+
+            {/* Chat Messages */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', background: '#18191a' }}>
+              {activeChatUser && messages.length > 0 ? (
+                messages.map((msg, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: msg.isCurrentUser ? 'flex-end' : 'flex-start',
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        background: msg.isCurrentUser ? '#0084ff' : '#3a3b3c',
+                        color: msg.isCurrentUser ? '#fff' : '#e4e6eb',
+                        borderRadius: 18,
+                        padding: '10px 16px',
+                        maxWidth: '70%',
+                        fontSize: 15,
+                        marginBottom: 2,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {msg.message}
+                    </div>
+                    <div style={{ color: '#aaa', fontSize: 11, margin: msg.isCurrentUser ? '0 8px 0 0' : '0 0 0 8px', alignSelf: msg.isCurrentUser ? 'flex-end' : 'flex-start' }}>
+                      {msg.user}
+                    </div>
+                  </div>
+                ))
+              ) : activeChatUser ? (
+                <div style={{ color: '#aaa', textAlign: 'center', marginTop: 32 }}>No messages yet</div>
+              ) : null}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Message Input */}
+            {activeChatUser && (
+              <div style={{ background: '#242526', padding: 16, borderTop: '1px solid #393a3b', display: 'flex', alignItems: 'center' }}>
+                <IonInput
+                  value={message}
+                  placeholder="Aa"
+                  onIonChange={e => setMessage(e.detail.value ?? '')}
+                  onKeyPress={handleKeyPress}
+                  style={{
+                    flex: 1,
+                    background: '#3a3b3c',
+                    color: '#fff',
+                    borderRadius: 20,
+                    padding: '10px 16px',
+                    marginRight: 12,
+                  }}
+                  className="message-input"
+                />
+                <IonButton
+                  onClick={sendMessage}
+                  color="primary"
+                  className="send-button"
+                  disabled={!message.trim()}
+                  style={{ borderRadius: '50%', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <IonIcon icon={send} />
+                </IonButton>
+              </div>
+            )}
+          </div>
+        </div>
       </IonContent>
-
-      <style>
-        {`
-          /* Chat Popup Styles */
-          .chat-popup {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 350px;
-            max-height: 500px;
-            background-color: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-            display: flex;
-            flex-direction: column;
-            z-index: 1000;
-          }
-
-          .chat-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            background: #0084ff;
-            color: white;
-            border-radius: 12px 12px 0 0;
-          }
-
-          .header-content {
-            display: flex;
-            align-items: center;
-            flex-grow: 1;
-          }
-
-          .chat-avatar {
-            width: 36px;
-            height: 36px;
-            margin-right: 12px;
-          }
-
-          .chat-info h3 {
-            margin: 0;
-            font-size: 1rem;
-            font-weight: 500;
-          }
-
-          .chat-info p {
-            margin: 0;
-            font-size: 0.8rem;
-          }
-
-          .close-button {
-            margin: 0;
-            color: white;
-          }
-
-          .chat-messages {
-            flex-grow: 1;
-            padding: 12px;
-            overflow-y: auto;
-            background: #f0f2f5;
-            max-height: 350px;
-          }
-
-          .message-bubble {
-            max-width: 80%;
-            margin-bottom: 12px;
-            padding: 8px 12px;
-            border-radius: 18px;
-          }
-
-          .message-bubble.sent {
-            background: #0084ff;
-            color: white;
-            margin-left: auto;
-            border-bottom-right-radius: 4px;
-          }
-
-          .message-bubble.received {
-            background: #e4e6eb;
-            color: black;
-            margin-right: auto;
-            border-bottom-left-radius: 4px;
-          }
-
-          .message-sender {
-            font-weight: bold;
-            font-size: 0.8rem;
-            margin-bottom: 4px;
-          }
-
-          .message-content {
-            font-size: 0.9rem;
-          }
-
-          .chat-input {
-            display: flex;
-            padding: 12px;
-            background: white;
-            border-top: 1px solid #e4e6eb;
-            align-items: center;
-          }
-
-          .message-input {
-            flex-grow: 1;
-            background: #f0f2f5;
-            border-radius: 20px;
-            padding: 8px 16px !important;
-            margin-right: 8px;
-          }
-
-          .send-button {
-            margin: 0;
-            --padding-start: 8px;
-            --padding-end: 8px;
-          }
-
-          .no-messages {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-          }
-
-          /* Status indicators */
-          .online-status {
-            color: #31A24C;
-          }
-
-          .offline-status {
-            color: #666;
-          }
-
-          .online-badge {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            width: 12px;
-            height: 12px;
-            background-color: #31A24C;
-            border-radius: 50%;
-            border: 2px solid var(--ion-background-color);
-          }
-
-          .last-seen {
-            font-size: 0.7rem;
-          }
-        `}
-      </style>
     </IonPage>
   );
 };
