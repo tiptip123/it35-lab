@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "homepage": "https://tiptip123.github.io/it35-lab",
+  "homepage": "https://bujirenso.github.io/it35-lab-tiptip123",
   "scripts": {
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
