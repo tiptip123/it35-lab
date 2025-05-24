@@ -2,10 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   IonContent, IonPage, IonInput, IonButton, IonAlert, IonHeader,
   IonBackButton, IonButtons, IonItem, IonText, IonCol, IonGrid,
-  IonRow, IonInputPasswordToggle, IonImg, IonAvatar,
+  IonRow, IonInputPasswordToggle, IonImg, IonAvatar, IonCard,
+  IonCardContent, IonCardHeader, IonCardTitle, IonCardSubtitle,
+  IonIcon, IonToggle, IonLabel, IonModal
 } from '@ionic/react';
 import { supabase } from '../utils/supabaseClient';
 import { useHistory } from 'react-router-dom';
+import { shieldCheckmarkOutline, qrCodeOutline, keyOutline } from 'ionicons/icons';
 
 const EditProfile: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -21,6 +24,13 @@ const EditProfile: React.FC = () => {
     const [alertMessage, setAlertMessage] = useState('');
     const history = useHistory();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+    const [show2FASetup, setShow2FASetup] = useState(false);
+    const [twoFactorSecret, setTwoFactorSecret] = useState('');
+    const [twoFactorQRCode, setTwoFactorQRCode] = useState('');
+    const [verificationCode, setVerificationCode] = useState('');
+    const [showVerificationModal, setShowVerificationModal] = useState(false);
+    const [factorId, setFactorId] = useState('');
   
     useEffect(() => {
         const fetchSessionAndData = async () => {
@@ -56,7 +66,20 @@ const EditProfile: React.FC = () => {
         };
       
         fetchSessionAndData();
-      }, [history]);
+    });
+  
+    useEffect(() => {
+        const check2FAStatus = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: factors } = await supabase.auth.mfa.listFactors();
+                if (factors) {
+                    setIs2FAEnabled(factors.totp.length > 0);
+                }
+            }
+        };
+        check2FAStatus();
+    }, []);
   
     const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -163,7 +186,81 @@ const EditProfile: React.FC = () => {
         setShowAlert(true);
         history.push('/it35-lab/app');
       };
-      
+  
+    const setup2FA = async () => {
+        try {
+            const { data, error } = await supabase.auth.mfa.enroll({
+                factorType: 'totp'
+            });
+
+            if (error) throw error;
+
+            if (data && data.totp) {
+                setTwoFactorSecret(data.totp.secret);
+                setTwoFactorQRCode(data.totp.uri);
+                setFactorId(data.id);
+                setShow2FASetup(true);
+            }
+        } catch (error) {
+            setAlertMessage('Failed to setup 2FA: ' + (error as Error).message);
+            setShowAlert(true);
+        }
+    };
+
+    const verifyAndEnable2FA = async () => {
+        try {
+            const { data: challengeData, error } = await supabase.auth.mfa.challenge({
+                factorId: factorId
+            });
+
+            if (error) throw error;
+
+            if (challengeData) {
+                const { error: verifyError } = await supabase.auth.mfa.verify({
+                    factorId: factorId,
+                    challengeId: challengeData.id,
+                    code: verificationCode
+                });
+
+                if (verifyError) throw verifyError;
+
+                setIs2FAEnabled(true);
+                setShowVerificationModal(false);
+                setShow2FASetup(false);
+                setAlertMessage('2FA has been enabled successfully!');
+                setShowAlert(true);
+            }
+        } catch (error) {
+            setAlertMessage('Failed to verify 2FA: ' + (error as Error).message);
+            setShowAlert(true);
+        }
+    };
+
+    const disable2FA = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('No user found');
+
+            const { data: factors } = await supabase.auth.mfa.listFactors();
+            if (factors && factors.totp.length > 0) {
+                const totpFactor = factors.totp[0];
+                if (!totpFactor) throw new Error('No 2FA factor found');
+
+                const { error } = await supabase.auth.mfa.unenroll({
+                    factorId: totpFactor.id
+                });
+
+                if (error) throw error;
+
+                setIs2FAEnabled(false);
+                setAlertMessage('2FA has been disabled successfully!');
+                setShowAlert(true);
+            }
+        } catch (error) {
+            setAlertMessage('Failed to disable 2FA: ' + (error as Error).message);
+            setShowAlert(true);
+        }
+    };
   
     return (
       <IonPage>
@@ -310,6 +407,92 @@ const EditProfile: React.FC = () => {
           <IonButton expand="full" onClick={handleUpdate} shape="round">
             Update Account
           </IonButton>
+  
+          {/* 2FA Section */}
+          <IonCard>
+            <IonCardHeader>
+              <IonCardTitle>Two-Factor Authentication</IonCardTitle>
+              <IonCardSubtitle>Add an extra layer of security to your account</IonCardSubtitle>
+            </IonCardHeader>
+            <IonCardContent>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <IonIcon icon={shieldCheckmarkOutline} color={is2FAEnabled ? 'success' : 'medium'} />
+                  <IonLabel>Two-Factor Authentication</IonLabel>
+                </div>
+                <IonToggle
+                  checked={is2FAEnabled}
+                  onIonChange={(e) => {
+                    if (e.detail.checked) {
+                      setup2FA();
+                    } else {
+                      disable2FA();
+                    }
+                  }}
+                />
+              </div>
+              {is2FAEnabled && (
+                <IonText color="success">
+                  <p>Two-factor authentication is enabled for your account.</p>
+                </IonText>
+              )}
+            </IonCardContent>
+          </IonCard>
+
+          {/* 2FA Setup Modal */}
+          <IonModal isOpen={show2FASetup} onDidDismiss={() => setShow2FASetup(false)}>
+            <IonContent className="ion-padding">
+              <IonCard>
+                <IonCardHeader>
+                  <IonCardTitle>Setup Two-Factor Authentication</IonCardTitle>
+                  <IonCardSubtitle>Scan the QR code with your authenticator app</IonCardSubtitle>
+                </IonCardHeader>
+                <IonCardContent>
+                  <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(twoFactorQRCode)}`}
+                      alt="2FA QR Code"
+                      style={{ maxWidth: '200px', margin: '0 auto' }}
+                    />
+                  </div>
+                  <IonText>
+                    <p>1. Install an authenticator app like Google Authenticator or Authy</p>
+                    <p>2. Scan the QR code with your authenticator app</p>
+                    <p>3. Enter the 6-digit code from your authenticator app</p>
+                  </IonText>
+                  <IonButton expand="block" onClick={() => setShowVerificationModal(true)}>
+                    Continue
+                  </IonButton>
+                </IonCardContent>
+              </IonCard>
+            </IonContent>
+          </IonModal>
+
+          {/* Verification Modal */}
+          <IonModal isOpen={showVerificationModal} onDidDismiss={() => setShowVerificationModal(false)}>
+            <IonContent className="ion-padding">
+              <IonCard>
+                <IonCardHeader>
+                  <IonCardTitle>Verify Setup</IonCardTitle>
+                  <IonCardSubtitle>Enter the code from your authenticator app</IonCardSubtitle>
+                </IonCardHeader>
+                <IonCardContent>
+                  <IonInput
+                    label="Verification Code"
+                    type="number"
+                    labelPlacement="floating"
+                    fill="outline"
+                    placeholder="Enter 6-digit code"
+                    value={verificationCode}
+                    onIonChange={(e) => setVerificationCode(e.detail.value!)}
+                  />
+                  <IonButton expand="block" onClick={verifyAndEnable2FA} style={{ marginTop: '16px' }}>
+                    Verify and Enable
+                  </IonButton>
+                </IonCardContent>
+              </IonCard>
+            </IonContent>
+          </IonModal>
   
           {/* Alert for success or errors */}
           <IonAlert
