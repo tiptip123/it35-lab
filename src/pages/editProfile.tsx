@@ -31,6 +31,10 @@ const EditProfile: React.FC = () => {
     const [verificationCode, setVerificationCode] = useState('');
     const [showVerificationModal, setShowVerificationModal] = useState(false);
     const [factorId, setFactorId] = useState('');
+    const [showDisable2FAModal, setShowDisable2FAModal] = useState(false);
+    const [disable2FACode, setDisable2FACode] = useState('');
+    const [disable2FAChallengeId, setDisable2FAChallengeId] = useState('');
+    const [disable2FAFactorId, setDisable2FAFactorId] = useState('');
   
     useEffect(() => {
         const fetchSessionAndData = async () => {
@@ -422,11 +426,29 @@ const EditProfile: React.FC = () => {
                 </div>
                 <IonToggle
                   checked={is2FAEnabled}
-                  onIonChange={(e) => {
+                  onIonChange={async (e) => {
                     if (e.detail.checked) {
                       setup2FA();
                     } else {
-                      disable2FA();
+                      // Prepare to prompt for code
+                      // Get the factorId and challengeId
+                      const { data: factors } = await supabase.auth.mfa.listFactors();
+                      if (factors && factors.totp.length > 0) {
+                        const totpFactor = factors.totp[0];
+                        setDisable2FAFactorId(totpFactor.id);
+                        // Start a challenge
+                        const { data: challengeData, error } = await supabase.auth.mfa.challenge({ factorId: totpFactor.id });
+                        if (!error && challengeData) {
+                          setDisable2FAChallengeId(challengeData.id);
+                          setShowDisable2FAModal(true);
+                        } else {
+                          setAlertMessage('Failed to start 2FA challenge: ' + (error ? error.message : 'Unknown error'));
+                          setShowAlert(true);
+                        }
+                      } else {
+                        setAlertMessage('No 2FA factor found to disable.');
+                        setShowAlert(true);
+                      }
                     }
                   }}
                 />
@@ -488,6 +510,57 @@ const EditProfile: React.FC = () => {
                   />
                   <IonButton expand="block" onClick={verifyAndEnable2FA} style={{ marginTop: '16px' }}>
                     Verify and Enable
+                  </IonButton>
+                </IonCardContent>
+              </IonCard>
+            </IonContent>
+          </IonModal>
+
+          {/* Disable 2FA Modal */}
+          <IonModal isOpen={showDisable2FAModal} onDidDismiss={() => setShowDisable2FAModal(false)}>
+            <IonContent className="ion-padding">
+              <IonCard>
+                <IonCardHeader>
+                  <IonCardTitle>Disable Two-Factor Authentication</IonCardTitle>
+                  <IonCardSubtitle>Enter your 2FA code to confirm</IonCardSubtitle>
+                </IonCardHeader>
+                <IonCardContent>
+                  <IonInput
+                    label="2FA Code"
+                    type="number"
+                    labelPlacement="floating"
+                    fill="outline"
+                    placeholder="Enter 6-digit code"
+                    value={disable2FACode}
+                    onIonChange={(e) => setDisable2FACode(e.detail.value!)}
+                  />
+                  <IonButton expand="block" onClick={async () => {
+                    // Step 1: Verify the code (AAL2)
+                    const { error: verifyError } = await supabase.auth.mfa.verify({
+                      factorId: disable2FAFactorId,
+                      challengeId: disable2FAChallengeId,
+                      code: disable2FACode
+                    });
+                    if (verifyError) {
+                      setAlertMessage('Failed to verify 2FA code: ' + verifyError.message);
+                      setShowAlert(true);
+                      return;
+                    }
+                    // Step 2: Unenroll the factor
+                    const { error: unenrollError } = await supabase.auth.mfa.unenroll({
+                      factorId: disable2FAFactorId
+                    });
+                    if (unenrollError) {
+                      setAlertMessage('Failed to disable 2FA: ' + unenrollError.message);
+                      setShowAlert(true);
+                      return;
+                    }
+                    setIs2FAEnabled(false);
+                    setShowDisable2FAModal(false);
+                    setAlertMessage('2FA has been disabled successfully!');
+                    setShowAlert(true);
+                  }}>
+                    Disable 2FA
                   </IonButton>
                 </IonCardContent>
               </IonCard>

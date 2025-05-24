@@ -59,6 +59,8 @@ const Login: React.FC = () => {
     // Step 1: Try normal login
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
+    console.log('Login response:', data);
+
     if (error) {
       setAlertMessage(error.message);
       setShowAlert(true);
