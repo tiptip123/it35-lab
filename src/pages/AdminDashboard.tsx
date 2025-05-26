@@ -171,6 +171,9 @@ const AdminDashboard: React.FC = () => {
                           <h2>{incident.type}</h2>
                           <p>{incident.user_email}</p>
                           <p>{new Date(incident.timestamp).toLocaleString()}</p>
+                          {incident.description && (
+                            <p style={{ color: '#888', fontStyle: 'italic' }}>{incident.description}</p>
+                          )}
                         </IonLabel>
                         <IonBadge color={incident.status === 'resolved' ? 'success' : 'warning'}>
                           {incident.status}
