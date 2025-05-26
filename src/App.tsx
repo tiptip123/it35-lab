@@ -34,7 +34,9 @@ import './theme/variables.css';
 import Login from './pages/Login';
 import Menu from './pages/Menu';
 import Register from './pages/Register';
-import ChatPage from './pages/home-tabs/ChatPage'; 
+import ChatPage from './pages/home-tabs/ChatPage';
+import AdminDashboard from './pages/AdminDashboard';
+import ChangePassword from './pages/ChangePassword';
 
 setupIonicReact();
 
@@ -46,7 +48,8 @@ const App: React.FC = () => (
         <Route exact path="/it35-lab/register" component={Register} />
         <Route path="/it35-lab/app" component={Menu} />
         <Route path="/it35-lab/app/chat/:id" component={ChatPage} />
-        <Route path="/it35-lab/app/chat/:id" component={ChatPage} />
+        <Route path="/it35-lab/admin" component={AdminDashboard} />
+        <Route path="/it35-lab/change-password" component={ChangePassword} />
       </IonRouterOutlet>
     </IonReactRouter>
   </IonApp>

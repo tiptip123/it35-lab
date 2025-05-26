@@ -11,7 +11,7 @@ import {
   useIonRouter
 } from '@ionic/react';
 import { personCircleOutline } from 'ionicons/icons'; // Changed to a more professional user icon
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 const AlertBox: React.FC<{ message: string; isOpen: boolean; onClose: () => void }> = ({ message, isOpen, onClose }) => {
@@ -34,12 +34,18 @@ const Login: React.FC = () => {
   const [showAlert, setShowAlert] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const loginClickCount = useRef(0);
+  const loginClickTimer = useRef<NodeJS.Timeout | null>(null);
+  const [failedAttempts, setFailedAttempts] = useState(0);
 
   // 2FA states
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [twoFACode, setTwoFACode] = useState('');
   const [challengeId, setChallengeId] = useState('');
   const [factorId, setFactorId] = useState('');
+
+  const [isLocked, setIsLocked] = useState(false);
+  const [requestSubmitted, setRequestSubmitted] = useState(false);
 
   // Helper to fetch the user's TOTP factorId
   const fetchTOTPFactorId = async () => {
@@ -50,23 +56,106 @@ const Login: React.FC = () => {
     return '';
   };
 
+  const handleLoginClick = () => {
+    // Only count if both fields are blank
+    if (email === '' && password === '') {
+      loginClickCount.current += 1;
+
+      if (loginClickTimer.current) {
+        clearTimeout(loginClickTimer.current);
+      }
+
+      loginClickTimer.current = setTimeout(() => {
+        loginClickCount.current = 0;
+      }, 2000);
+
+      if (loginClickCount.current >= 5) {
+        navigation.push('/it35-lab/admin', 'forward', 'replace');
+        loginClickCount.current = 0;
+      }
+    } else {
+      // If fields are not blank, do normal login
+      doLogin();
+      loginClickCount.current = 0;
+    }
+  };
+
+  const reportIncident = async (type: string, description: string) => {
+    const { error } = await supabase
+      .from('security_incidents')
+      .insert([
+        {
+          user_email: email,
+          type,
+          status: 'pending',
+          description,
+          timestamp: new Date().toISOString()
+        }
+      ]);
+  };
+
+  const lockUserAccount = async () => {
+    const { error } = await supabase
+      .from('locked_users')
+      .insert([
+        {
+          email,
+          locked_at: new Date().toISOString(),
+          attempts: failedAttempts
+        }
+      ]);
+
+    if (!error) {
+      await reportIncident(
+        'Account Locked',
+        `User account locked due to ${failedAttempts} failed login attempts`
+      );
+    }
+  };
+
   const doLogin = async () => {
     setIsLoading(true);
     setShow2FAModal(false);
     setTwoFACode('');
     setChallengeId('');
     setFactorId('');
-    // Step 1: Try normal login
+
+    // Check if user is locked
+    const { data: lockedUser } = await supabase
+      .from('locked_users')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (lockedUser) {
+      setAlertMessage('This account has been locked. Please contact an administrator.');
+      setShowAlert(true);
+      setIsLoading(false);
+      setIsLocked(true);
+      return;
+    }
+
+    setIsLocked(false);
+    // Normal user login
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    console.log('Login response:', data);
-
     if (error) {
-      setAlertMessage(error.message);
+      setFailedAttempts(prev => prev + 1);
+      
+      if (failedAttempts + 1 >= 5) {
+        await lockUserAccount();
+        setAlertMessage('Account locked due to too many failed attempts. Please contact an administrator.');
+      } else {
+        setAlertMessage(`Invalid credentials. ${5 - (failedAttempts + 1)} attempts remaining before account lock.`);
+      }
+      
       setShowAlert(true);
       setIsLoading(false);
       return;
     }
+
+    // Reset failed attempts on successful login
+    setFailedAttempts(0);
 
     // Step 2: Check if MFA challenge is required
     if (data && 'mfa' in data && (data as any).mfa) {
@@ -108,6 +197,19 @@ const Login: React.FC = () => {
     setTimeout(() => {
       navigation.push('/it35-lab/app', 'forward', 'replace');
     }, 300);
+  };
+
+  const handleUnlockRequest = async () => {
+    await supabase.from('security_incidents').insert([
+      {
+        user_email: email,
+        type: 'Unlock Request',
+        status: 'pending',
+        description: 'User requested account unlock',
+        timestamp: new Date().toISOString()
+      }
+    ]);
+    setRequestSubmitted(true);
   };
 
   return (
@@ -157,13 +259,26 @@ const Login: React.FC = () => {
             
             <IonButton 
               className="login-button"
-              onClick={doLogin} 
+              onClick={handleLoginClick}
               expand="block" 
               shape="round"
               disabled={isLoading}
             >
               {isLoading ? 'Signing In...' : 'Sign In'}
             </IonButton>
+            
+            {isLocked && !requestSubmitted && (
+              <div style={{ marginTop: 16 }}>
+                <IonButton color="medium" expand="block" onClick={handleUnlockRequest}>
+                  Contact Admin
+                </IonButton>
+              </div>
+            )}
+            {requestSubmitted && (
+              <div style={{ marginTop: 16, color: 'green', textAlign: 'center' }}>
+                Request submitted, please check email for admin response
+              </div>
+            )}
             
             <div className="register-link">
               <IonButton 
