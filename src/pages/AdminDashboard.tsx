@@ -22,6 +22,8 @@ import { lockClosedOutline, lockOpenOutline, warningOutline, mailOutline } from 
 import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useIonRouter } from '@ionic/react';
+import './AdminDashboard.css';
+import emailjs from '@emailjs/browser';
 
 interface Incident {
   id: string;
@@ -42,6 +44,33 @@ interface LockedUser {
 interface UnlockRequest extends Incident {
   // Inherits all fields from Incident
 }
+
+const EMAILJS_SERVICE_ID = 'service_o27s838';
+const EMAILJS_TEMPLATE_ID = 'template_iqihl2r';
+const EMAILJS_PUBLIC_KEY = 'i2lhDcM-RtILyFyLv';
+
+const sendResetEmail = async (toEmail: string, resetLink: string) => {
+  await emailjs.send(
+    EMAILJS_SERVICE_ID,
+    EMAILJS_TEMPLATE_ID,
+    {
+      link: resetLink,
+    },
+    EMAILJS_PUBLIC_KEY
+  );
+};
+
+const sendTest = () => {
+  emailjs.send(
+    'service_o27s838',
+    'template_iqihl2r',
+    { link: 'https://example.com' },
+    'i2lhDcM-RtILyFyLv'
+  ).then(
+    (result) => { alert('Email sent!'); },
+    (error) => { alert('Failed: ' + error.text); }
+  );
+};
 
 const AdminDashboard: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -98,16 +127,13 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleUnlockAndReset = async (user_email: string, request_id: string) => {
-    // Remove from locked_users
-    await supabase.from('locked_users').delete().eq('email', user_email);
-    // Send password reset email
+  const handleSendResetEmail = async (user_email: string, request_id: string) => {
+    // Use Supabase Auth to send password reset email with the correct deployed URL and hash routing
     await supabase.auth.resetPasswordForEmail(user_email, {
-      redirectTo: window.location.origin + '/it35-lab/change-password',
+      redirectTo: 'https://tiptip123.github.io/it35-lab/#/change-password',
     });
     // Mark request as resolved
     await supabase.from('security_incidents').update({ status: 'resolved' }).eq('id', request_id);
-    fetchLockedUsers();
     fetchUnlockRequests();
   };
 
@@ -125,16 +151,12 @@ const AdminDashboard: React.FC = () => {
           </IonButton>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="ion-padding">
+      <IonContent className="ion-padding admin-dashboard-bg">
         <IonGrid>
           <IonRow>
             <IonCol size="12">
-              <IonCard>
-                <IonCardHeader>
-                  <IonCardTitle>
-                    <IonIcon icon={mailOutline} /> Unlock Requests
-                  </IonCardTitle>
-                </IonCardHeader>
+              <h2 className="dashboard-section-title"><IonIcon icon={mailOutline} /> Unlock Requests</h2>
+              <IonCard className="dashboard-card">
                 <IonCardContent>
                   <IonList>
                     {unlockRequests.length === 0 && (
@@ -146,8 +168,8 @@ const AdminDashboard: React.FC = () => {
                           <h2>{req.user_email}</h2>
                           <p>{new Date(req.timestamp).toLocaleString()}</p>
                         </IonLabel>
-                        <IonButton color="success" onClick={() => handleUnlockAndReset(req.user_email, req.id)}>
-                          Unlock & Send Reset Email
+                        <IonButton color="success" onClick={() => handleSendResetEmail(req.user_email, req.id)}>
+                          Send Reset Email
                         </IonButton>
                       </IonItem>
                     ))}
@@ -155,14 +177,9 @@ const AdminDashboard: React.FC = () => {
                 </IonCardContent>
               </IonCard>
             </IonCol>
-
             <IonCol size="12" sizeMd="6">
-              <IonCard>
-                <IonCardHeader>
-                  <IonCardTitle>
-                    <IonIcon icon={warningOutline} /> Security Incidents
-                  </IonCardTitle>
-                </IonCardHeader>
+              <h2 className="dashboard-section-title"><IonIcon icon={warningOutline} /> Security Incidents</h2>
+              <IonCard className="dashboard-card">
                 <IonCardContent>
                   <IonList>
                     {incidents.map((incident) => (
@@ -184,14 +201,9 @@ const AdminDashboard: React.FC = () => {
                 </IonCardContent>
               </IonCard>
             </IonCol>
-
             <IonCol size="12" sizeMd="6">
-              <IonCard>
-                <IonCardHeader>
-                  <IonCardTitle>
-                    <IonIcon icon={lockClosedOutline} /> Locked Users
-                  </IonCardTitle>
-                </IonCardHeader>
+              <h2 className="dashboard-section-title"><IonIcon icon={lockClosedOutline} /> Locked Users</h2>
+              <IonCard className="dashboard-card">
                 <IonCardContent>
                   <IonList>
                     {lockedUsers.map((user) => (

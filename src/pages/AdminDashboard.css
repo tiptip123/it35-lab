@@ -1,0 +1,19 @@
+.admin-dashboard-bg {
+  background: #f6f8fa;
+  min-height: 100vh;
+}
+.dashboard-section-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 32px 0 12px 0;
+  color: #2d3748;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dashboard-card {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  border-radius: 16px;
+  margin-bottom: 24px;
+  background: #fff;
+} 

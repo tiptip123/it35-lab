@@ -37,6 +37,7 @@ const Login: React.FC = () => {
   const loginClickCount = useRef(0);
   const loginClickTimer = useRef<NodeJS.Timeout | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
+  const [inputError, setInputError] = useState(false);
 
   // 2FA states
   const [show2FAModal, setShow2FAModal] = useState(false);
@@ -141,21 +142,19 @@ const Login: React.FC = () => {
 
     if (error) {
       setFailedAttempts(prev => prev + 1);
-      
+      setInputError(true);
       if (failedAttempts + 1 >= 5) {
         await lockUserAccount();
         setAlertMessage('Account locked due to too many failed attempts. Please contact an administrator.');
-      } else {
-        setAlertMessage(`Invalid credentials. ${5 - (failedAttempts + 1)} attempts remaining before account lock.`);
+        setShowAlert(true);
       }
-      
-      setShowAlert(true);
       setIsLoading(false);
       return;
     }
 
-    // Reset failed attempts on successful login
+    // Reset failed attempts and error state on successful login
     setFailedAttempts(0);
+    setInputError(false);
 
     // Step 2: Check if MFA challenge is required
     if (data && 'mfa' in data && (data as any).mfa) {
@@ -239,7 +238,7 @@ const Login: React.FC = () => {
                 placeholder="Enter Email"
                 value={email}
                 onIonChange={e => setEmail(e.detail.value!)}
-                style={{ '--color': '#000000' }}  // Added black text color
+                style={{ '--color': '#000000', '--border-color': inputError ? 'red' : '#e2e8f0' }}
               />
             </div>
             
@@ -251,7 +250,7 @@ const Login: React.FC = () => {
                 placeholder="Password"
                 value={password}
                 onIonChange={e => setPassword(e.detail.value!)}
-                style={{ '--color': '#000000' }}  // Added black text color
+                style={{ '--color': '#000000', '--border-color': inputError ? 'red' : '#e2e8f0' }}
               >
                 <IonInputPasswordToggle slot="end"></IonInputPasswordToggle>
               </IonInput>
@@ -404,7 +403,10 @@ const styles = `
     --border-radius: 8px;
     --border-color: #e2e8f0;
     --highlight-color-focused: #5e72e4;
-    --color: #000000; /* Ensures text is black */
+    --color: #000000;
+  }
+  .custom-input[style*='red'] {
+    --border-color: red !important;
   }
   
   .login-button {
