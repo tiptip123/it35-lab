@@ -8,11 +8,25 @@ import {
   IonInputPasswordToggle,  
   IonPage,  
   IonToast,  
-  useIonRouter
+  useIonRouter,
+  IonSelect,
+  IonSelectOption,
+  IonTextarea,
+  IonCard,
+  IonCardHeader,
+  IonCardTitle,
+  IonCardContent,
+  IonLabel
 } from '@ionic/react';
 import { personCircleOutline } from 'ionicons/icons'; // Changed to a more professional user icon
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
+
+// Add Asset type
+interface Asset {
+  id: string;
+  name: string;
+}
 
 const AlertBox: React.FC<{ message: string; isOpen: boolean; onClose: () => void }> = ({ message, isOpen, onClose }) => {
   return (
@@ -48,6 +62,12 @@ const Login: React.FC = () => {
   const [isLocked, setIsLocked] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState(false);
 
+  const [incidentType, setIncidentType] = useState('Phishing');
+  const [impactLevel, setImpactLevel] = useState('Low');
+  const [asset, setAsset] = useState('');
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [incidentDescription, setIncidentDescription] = useState('');
+
   // Helper to fetch the user's TOTP factorId
   const fetchTOTPFactorId = async () => {
     const { data: factors } = await supabase.auth.mfa.listFactors();
@@ -81,15 +101,17 @@ const Login: React.FC = () => {
     }
   };
 
-  const reportIncident = async (type: string, description: string) => {
+  const reportIncident = async () => {
     const { error } = await supabase
       .from('security_incidents')
       .insert([
         {
           user_email: email,
-          type,
+          type: incidentType,
           status: 'pending',
-          description,
+          description: incidentDescription,
+          impact_level: impactLevel,
+          asset: asset,
           timestamp: new Date().toISOString()
         }
       ]);
@@ -107,10 +129,7 @@ const Login: React.FC = () => {
       ]);
 
     if (!error) {
-      await reportIncident(
-        'Account Locked',
-        `User account locked due to ${failedAttempts} failed login attempts`
-      );
+      await reportIncident();
     }
   };
 
@@ -205,11 +224,21 @@ const Login: React.FC = () => {
         type: 'Unlock Request',
         status: 'pending',
         description: 'User requested account unlock',
+        impact_level: 'Low',
+        asset: '',
         timestamp: new Date().toISOString()
       }
     ]);
     setRequestSubmitted(true);
   };
+
+  useEffect(() => {
+    const fetchAssets = async () => {
+      const { data } = await supabase.from('assets').select('*');
+      if (data) setAssets(data);
+    };
+    fetchAssets();
+  }, []);
 
   return (
     <IonPage>
@@ -335,6 +364,41 @@ const Login: React.FC = () => {
           position="top"
           color="primary"
         />
+
+        {/* Incident Reporting Form UI */}
+        <IonCard style={{ marginTop: 24 }}>
+          <IonCardHeader>
+            <IonCardTitle>Report Security Incident</IonCardTitle>
+          </IonCardHeader>
+          <IonCardContent>
+            <IonLabel position="stacked">Incident Type</IonLabel>
+            <IonSelect value={incidentType} onIonChange={e => setIncidentType(e.detail.value)}>
+              <IonSelectOption value="Phishing">Phishing</IonSelectOption>
+              <IonSelectOption value="Data Breach">Data Breach</IonSelectOption>
+              <IonSelectOption value="Unauthorized Access">Unauthorized Access</IonSelectOption>
+              <IonSelectOption value="Malware">Malware</IonSelectOption>
+              <IonSelectOption value="Other">Other</IonSelectOption>
+            </IonSelect>
+            <IonLabel position="stacked" style={{ marginTop: 16 }}>Impact Level</IonLabel>
+            <IonSelect value={impactLevel} onIonChange={e => setImpactLevel(e.detail.value)}>
+              <IonSelectOption value="Low">Low</IonSelectOption>
+              <IonSelectOption value="Medium">Medium</IonSelectOption>
+              <IonSelectOption value="High">High</IonSelectOption>
+              <IonSelectOption value="Critical">Critical</IonSelectOption>
+            </IonSelect>
+            <IonLabel position="stacked" style={{ marginTop: 16 }}>Affected Asset</IonLabel>
+            <IonSelect value={asset} onIonChange={e => setAsset(e.detail.value)}>
+              {assets.map(a => (
+                <IonSelectOption key={a.id} value={a.name}>{a.name}</IonSelectOption>
+              ))}
+            </IonSelect>
+            <IonLabel position="stacked" style={{ marginTop: 16 }}>Description</IonLabel>
+            <IonTextarea value={incidentDescription} onIonChange={e => setIncidentDescription(e.detail.value!)} />
+            <IonButton expand="block" style={{ marginTop: 24 }} onClick={reportIncident} disabled={isLoading}>
+              Report Incident
+            </IonButton>
+          </IonCardContent>
+        </IonCard>
       </IonContent>
     </IonPage>
   );
@@ -344,94 +408,3 @@ export default Login;
 
 
 const styles = `
-  .login-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 80vh;
-    padding: 20px;
-  }
-  
-  .login-card {
-    width: 100%;
-    max-width: 400px;
-    background: white;
-    border-radius: 16px;
-    padding: 32px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  }
-  
-  .logo-container {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 24px;
-  }
-  
-  .logo-avatar {
-    width: 100px;
-    height: 100px;
-    background: #f8f9fa;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-  
-  .logo-icon {
-    font-size: 80px;
-    color: #5e72e4;
-  }
-  
-  .login-title {
-    text-align: center;
-    color: #2d3748;
-    margin-bottom: 8px;
-    font-size: 24px;
-    font-weight: 600;
-  }
-  
-  .login-subtitle {
-    text-align: center;
-    color: #718096;
-    margin-bottom: 32px;
-    font-size: 14px;
-  }
-  
-  .form-group {
-    margin-bottom: 20px;
-  }
-  
-  .custom-input {
-    --border-radius: 8px;
-    --border-color: #e2e8f0;
-    --highlight-color-focused: #5e72e4;
-    --color: #000000;
-  }
-  .custom-input[style*='red'] {
-    --border-color: red !important;
-  }
-  
-  .login-button {
-    --background: #5e72e4;
-    --background-activated: #4a5acf;
-    --background-focused: #4a5acf;
-    --background-hover: #4a5acf;
-    margin-top: 16px;
-    height: 48px;
-    font-weight: 600;
-     --color: #000000; 
-  }
-  
-  .register-link {
-    text-align: center;
-    margin-top: 24px;
-  }
-  
-  .register-button {
-    --color: #718096;
-    font-size: 14px;
-  }
-`;
-
-// Inject styles
-const styleElement = document.createElement('style');
-styleElement.innerHTML = styles;
-document.head.appendChild(styleElement);
