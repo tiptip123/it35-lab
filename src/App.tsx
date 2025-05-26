@@ -1,6 +1,8 @@
 import { Redirect, Route } from 'react-router-dom';
 import { IonApp, IonRouterOutlet, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
+import { useEffect } from 'react';
+import { supabase } from './utils/supabaseClient';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -40,19 +42,33 @@ import ChangePassword from './pages/ChangePassword';
 
 setupIonicReact();
 
-const App: React.FC = () => (
-  <IonApp>
-    <IonReactRouter>
-      <IonRouterOutlet>
-        <Route exact path="/it35-lab" component={Login} />
-        <Route exact path="/it35-lab/register" component={Register} />
-        <Route path="/it35-lab/app" component={Menu} />
-        <Route path="/it35-lab/app/chat/:id" component={ChatPage} />
-        <Route path="/it35-lab/admin" component={AdminDashboard} />
-        <Route path="/it35-lab/change-password" component={ChangePassword} />
-      </IonRouterOutlet>
-    </IonReactRouter>
-  </IonApp>
-);
+const App: React.FC = () => {
+  useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        localStorage.setItem('logoutReason', 'You were logged out because your account was logged in on another device.');
+        window.location.href = '/it35-lab';
+      }
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  return (
+    <IonApp>
+      <IonReactRouter>
+        <IonRouterOutlet>
+          <Route exact path="/it35-lab" component={Login} />
+          <Route exact path="/it35-lab/register" component={Register} />
+          <Route path="/it35-lab/app" component={Menu} />
+          <Route path="/it35-lab/app/chat/:id" component={ChatPage} />
+          <Route path="/it35-lab/admin" component={AdminDashboard} />
+          <Route path="/it35-lab/change-password" component={ChangePassword} />
+        </IonRouterOutlet>
+      </IonReactRouter>
+    </IonApp>
+  );
+};
 
 export default App;

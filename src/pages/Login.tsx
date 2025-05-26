@@ -68,6 +68,8 @@ const Login: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [incidentDescription, setIncidentDescription] = useState('');
 
+  const [logoutReason, setLogoutReason] = useState('');
+
   // Helper to fetch the user's TOTP factorId
   const fetchTOTPFactorId = async () => {
     const { data: factors } = await supabase.auth.mfa.listFactors();
@@ -240,6 +242,14 @@ const Login: React.FC = () => {
     fetchAssets();
   }, []);
 
+  useEffect(() => {
+    const reason = localStorage.getItem('logoutReason');
+    if (reason) {
+      setLogoutReason(reason);
+      localStorage.removeItem('logoutReason');
+    }
+  }, []);
+
   return (
     <IonPage>
       <IonContent className="ion-padding" color="light">
@@ -365,6 +375,16 @@ const Login: React.FC = () => {
           color="primary"
         />
 
+        {/* IonToast for logout reason */}
+        <IonToast
+          isOpen={!!logoutReason}
+          onDidDismiss={() => setLogoutReason('')}
+          message={logoutReason}
+          duration={3000}
+          position="top"
+          color="danger"
+        />
+
         {/* Incident Reporting Form UI */}
         <IonCard style={{ marginTop: 24 }}>
           <IonCardHeader>
@@ -407,4 +427,3 @@ const Login: React.FC = () => {
 export default Login;
 
 
-const styles = `
