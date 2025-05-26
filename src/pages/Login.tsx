@@ -11,7 +11,7 @@ import {
   useIonRouter
 } from '@ionic/react';
 import { personCircleOutline } from 'ionicons/icons'; // Changed to a more professional user icon
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 const AlertBox: React.FC<{ message: string; isOpen: boolean; onClose: () => void }> = ({ message, isOpen, onClose }) => {
@@ -35,9 +35,31 @@ const Login: React.FC = () => {
   const [showToast, setShowToast] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // 2FA states
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [twoFACode, setTwoFACode] = useState('');
+  const [challengeId, setChallengeId] = useState('');
+  const [factorId, setFactorId] = useState('');
+
+  // Helper to fetch the user's TOTP factorId
+  const fetchTOTPFactorId = async () => {
+    const { data: factors } = await supabase.auth.mfa.listFactors();
+    if (factors && factors.totp.length > 0) {
+      return factors.totp[0].id;
+    }
+    return '';
+  };
+
   const doLogin = async () => {
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setShow2FAModal(false);
+    setTwoFACode('');
+    setChallengeId('');
+    setFactorId('');
+    // Step 1: Try normal login
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    console.log('Login response:', data);
 
     if (error) {
       setAlertMessage(error.message);
@@ -46,13 +68,48 @@ const Login: React.FC = () => {
       return;
     }
 
+    // Step 2: Check if MFA challenge is required
+    if (data && 'mfa' in data && (data as any).mfa) {
+      const mfaData = (data as any).mfa;
+      setChallengeId(mfaData.id);
+      // Get the user's TOTP factorId
+      const fetchedFactorId = await fetchTOTPFactorId();
+      setFactorId(fetchedFactorId);
+      setShow2FAModal(true);
+      setIsLoading(false);
+      return;
+    }
+
+    // Step 3: Success, no 2FA required
     setShowToast(true);
     setIsLoading(false);
     setTimeout(() => {
       navigation.push('/it35-lab/app', 'forward', 'replace');
     }, 300);
   };
-  
+
+  // 2FA verification handler
+  const handle2FAVerify = async () => {
+    setIsLoading(true);
+    const { error } = await supabase.auth.mfa.verify({
+      factorId,
+      challengeId,
+      code: twoFACode
+    });
+    if (error) {
+      setAlertMessage(error.message);
+      setShowAlert(true);
+      setIsLoading(false);
+      return;
+    }
+    setShow2FAModal(false);
+    setShowToast(true);
+    setIsLoading(false);
+    setTimeout(() => {
+      navigation.push('/it35-lab/app', 'forward', 'replace');
+    }, 300);
+  };
+
   return (
     <IonPage>
       <IonContent className="ion-padding" color="light">
@@ -120,6 +177,37 @@ const Login: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* 2FA Modal */}
+        <IonAlert
+          isOpen={show2FAModal}
+          onDidDismiss={() => setShow2FAModal(false)}
+          header="Two-Factor Authentication Required"
+          message={
+            `<div>Please enter the 6-digit code from your authenticator app.</div>` +
+            `<input id='totp-input' type='number' placeholder='Enter 2FA code' style='width: 100%; margin-top: 10px; padding: 8px;' />`
+          }
+          buttons={[
+            {
+              text: 'Verify',
+              handler: async () => {
+                // Get the value from the input
+                const input = document.getElementById('totp-input') as HTMLInputElement;
+                setTwoFACode(input.value);
+                // Wait for state to update, then call verify
+                setTimeout(handle2FAVerify, 100);
+                return false;
+              }
+            },
+            {
+              text: 'Cancel',
+              role: 'cancel',
+              handler: () => setShow2FAModal(false)
+            }
+          ]}
+          // Prevent closing by clicking outside
+          backdropDismiss={false}
+        />
 
         {/* Reusable AlertBox Component */}
         <AlertBox message={alertMessage} isOpen={showAlert} onClose={() => setShowAlert(false)} />
