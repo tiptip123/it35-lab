@@ -25,6 +25,7 @@ import Details from './Details';
 import { supabase } from '../utils/supabaseClient';
 import { useState } from 'react';
 import EditProfile from './editProfile';
+import App from '../App'; // Import to access userInitiatedLogout
 
 
   const Menu: React.FC = () => {
@@ -39,6 +40,7 @@ import EditProfile from './editProfile';
         {name:'Profile', url: '/it35-lab/app/profile', icon: settingsOutline},
     ]
     const handleLogout = async () => {
+        (window as any).userInitiatedLogout = true;
         localStorage.setItem('logoutReason', 'You have been logged out successfully.');
         const { error } = await supabase.auth.signOut();
         if (!error) {

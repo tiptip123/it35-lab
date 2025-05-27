@@ -45,6 +45,7 @@ interface LockedUser {
   email: string;
   locked_at: string;
   attempts: number;
+  reason?: string;
 }
 
 interface UnlockRequest extends Incident {
@@ -289,6 +290,13 @@ const AdminDashboard: React.FC = () => {
                           <h2>{user.email}</h2>
                           <p>Locked at: {new Date(user.locked_at).toLocaleString()}</p>
                           <p>Failed attempts: {user.attempts}</p>
+                          <p>
+                            <strong>Reason: </strong>
+                            <span style={{color: user.reason === 'password failed' ? 'red' : user.reason === 'open in new device' ? 'orange' : '#fff'}}>
+                              {user.reason === 'password failed' ? 'Too many failed password attempts' :
+                                user.reason === 'open in new device' ? 'Logged in from a new device' : user.reason || 'Unknown'}
+                            </span>
+                          </p>
                         </IonLabel>
                         <IonButton
                           fill="clear"

@@ -43,6 +43,38 @@ const AlertBox: React.FC<{ message: string; isOpen: boolean; onClose: () => void
   );
 };
 
+// Browser-compatible UUID generator
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+// Helper to get device ID
+function getDeviceId() {
+  let id = localStorage.getItem('device_id');
+  if (!id) {
+    id = generateUUID();
+    localStorage.setItem('device_id', id);
+  }
+  return id;
+}
+
+// Helper to get public IP with fallback
+async function getPublicIP() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json');
+    if (!res.ok) throw new Error('IP fetch failed');
+    const data = await res.json();
+    return data.ip;
+  } catch (error) {
+    console.warn('Failed to get public IP:', error);
+    return 'unknown';
+  }
+}
+
 const Login: React.FC = () => {
   const navigation = useIonRouter();
   const [email, setEmail] = useState('');
@@ -129,18 +161,28 @@ const Login: React.FC = () => {
   };
 
   const lockUserAccount = async () => {
-    const { error } = await supabase
-      .from('locked_users')
-      .insert([
-        {
-          email,
-          locked_at: new Date().toISOString(),
-          attempts: failedAttempts + 1
-        }
-      ]);
+    try {
+      const { error } = await supabase
+        .from('locked_users')
+        .insert([
+          {
+            email: email.toLowerCase().trim(),
+            locked_at: new Date().toISOString(),
+            attempts: failedAttempts + 1,
+            reason: 'password failed'
+          }
+        ]);
 
-    if (!error) {
+      if (error) {
+        console.error('Error locking account:', error);
+        throw error;
+      }
+
       await reportIncident();
+    } catch (error) {
+      console.error('Failed to lock account:', error);
+      setAlertMessage('Failed to lock account. Please try again later.');
+      setShowAlert(true);
     }
   };
 
@@ -151,33 +193,77 @@ const Login: React.FC = () => {
     setChallengeId('');
     setFactorId('');
 
-    console.log('Starting login process...');
-
-    // Check if user is locked
-    const { data: lockedUser } = await supabase
-      .from('locked_users')
-      .select('*')
-      .eq('email', email)
-      .single();
-
-    if (lockedUser) {
-      setAlertMessage('This account has been locked. Please contact an administrator.');
-      setShowAlert(true);
-      setIsLoading(false);
-      setIsLocked(true);
-      setShowContactAdminBtn(true);
-      return;
-    }
-
-    setIsLocked(false);
-
     try {
-      // First attempt login
-      console.log('Attempting login...');
+      const deviceId = getDeviceId();
+      const ip = await getPublicIP();
+
+      // Check for other active sessions with same email but different device ID
+      const { data: sessions, error: sessionsError } = await supabase
+        .from('active_sessions')
+        .select('*')
+        .eq('email', email.toLowerCase().trim());
+
+      if (sessionsError) {
+        throw new Error('Failed to check active sessions');
+      }
+
+      if (sessions && sessions.length > 0) {
+        const otherSession = sessions.find((s: any) => s.device_id !== deviceId);
+        if (otherSession) {
+          // 1. Lock the account in the database
+          await supabase.from('locked_users').insert([
+            {
+              email: email.toLowerCase().trim(),
+              locked_at: new Date().toISOString(),
+              attempts: 5,
+              reason: 'open in new device'
+            }
+          ]);
+
+          // 2. Delete all sessions for this email
+          await supabase.from('active_sessions').delete().eq('email', email.toLowerCase().trim());
+
+          // 3. Sign out this session
+          await supabase.auth.signOut();
+
+          // 4. Set localStorage for UI feedback
+          localStorage.setItem('forceContactAdmin', 'true');
+          localStorage.setItem(
+            'logoutReason',
+            'Your account has been locked because it was accessed from another device. Please contact the admin.'
+          );
+
+          // 5. Redirect to login
+          window.location.href = '/it35-lab';
+          return;
+        }
+      }
+
+      // Check if user is locked
+      const { data: lockedUser, error: lockedError } = await supabase
+        .from('locked_users')
+        .select('*')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle();
+
+      if (lockedError) {
+        console.error('Error checking locked status:', lockedError);
+        setIsLocked(false);
+      } else if (lockedUser) {
+        setAlertMessage('This account has been locked. Please contact an administrator.');
+        setShowAlert(true);
+        setIsLoading(false);
+        setIsLocked(true);
+        setShowContactAdminBtn(true);
+        return;
+      }
+
+      setIsLocked(false);
+
+      // Attempt login
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
-        console.log('Login error:', error);
         setFailedAttempts(prev => prev + 1);
         setInputError(true);
         if (failedAttempts + 1 >= 5) {
@@ -191,72 +277,71 @@ const Login: React.FC = () => {
         return;
       }
 
-      console.log('Login successful, checking for 2FA...');
+      // Update or insert active session
+      const sessionData = {
+        email,
+        ip_address: ip,
+        device_id: deviceId,
+        last_active: new Date().toISOString()
+      };
 
-      // Reset failed attempts and error state on successful login
+      if (sessions && sessions.length > 0) {
+        await supabase
+          .from('active_sessions')
+          .update(sessionData)
+          .eq('email', email)
+          .eq('device_id', deviceId);
+      } else {
+        await supabase
+          .from('active_sessions')
+          .insert([sessionData]);
+      }
+
+      // Reset failed attempts and error state
       setFailedAttempts(0);
       setInputError(false);
 
       // Get the current session
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('Current session:', session);
 
       if (session) {
         // Check for 2FA factors
         const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-        console.log('2FA factors:', factors);
-        console.log('Factors error:', factorsError);
-
+        
         if (factorsError) {
-          console.log('Error getting factors:', factorsError);
-          setAlertMessage('Error checking 2FA status: ' + factorsError.message);
-          setShowAlert(true);
-          setIsLoading(false);
-          return;
+          throw new Error('Error checking 2FA status: ' + factorsError.message);
         }
 
         if (factors && factors.totp && factors.totp.length > 0) {
-          console.log('2FA is enabled, starting challenge...');
           const totpFactor = factors.totp[0];
-          
-          // Start 2FA challenge
           const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
             factorId: totpFactor.id
           });
 
-          console.log('Challenge data:', challengeData);
-          console.log('Challenge error:', challengeError);
-
           if (challengeError) {
-            console.log('Challenge error:', challengeError);
-            setAlertMessage('Failed to start 2FA challenge: ' + challengeError.message);
-            setShowAlert(true);
-            setIsLoading(false);
-            return;
+            throw new Error('Failed to start 2FA challenge: ' + challengeError.message);
           }
 
           if (challengeData) {
-            console.log('Showing 2FA modal...');
             setChallengeId(challengeData.id);
             setFactorId(totpFactor.id);
             setShow2FAModal(true);
             setIsLoading(false);
             return;
           }
-        } else {
-          console.log('No 2FA factors found');
         }
       }
 
       // If no 2FA required or verification successful
-      console.log('Proceeding without 2FA...');
       setShowToast(true);
       setIsLoading(false);
-      setTimeout(() => {
+      
+      // Use requestAnimationFrame for smoother navigation
+      requestAnimationFrame(() => {
         navigation.push('/it35-lab/app', 'forward', 'replace');
-      }, 300);
+      });
     } catch (error) {
-      console.log('Login process error:', error);
+      console.error('Login error:', error);
       setAlertMessage('An error occurred during login: ' + (error as Error).message);
       setShowAlert(true);
       setIsLoading(false);
@@ -265,7 +350,6 @@ const Login: React.FC = () => {
 
   // 2FA verification handler
   const handle2FAVerify = async () => {
-    console.log('Starting 2FA verification...');
     if (!twoFACode || twoFACode.length !== 6) {
       setAlertMessage('Please enter a valid 6-digit code');
       setShowAlert(true);
@@ -274,7 +358,6 @@ const Login: React.FC = () => {
 
     setIsLoading(true);
     try {
-      console.log('Verifying 2FA code...');
       const { error } = await supabase.auth.mfa.verify({
         factorId,
         challengeId,
@@ -282,22 +365,19 @@ const Login: React.FC = () => {
       });
 
       if (error) {
-        console.log('2FA verification error:', error);
-        setAlertMessage(error.message);
-        setShowAlert(true);
-        setIsLoading(false);
-        return;
+        throw new Error(error.message);
       }
 
-      console.log('2FA verification successful');
       setShow2FAModal(false);
       setShowToast(true);
       setIsLoading(false);
-      setTimeout(() => {
+      
+      // Use requestAnimationFrame for smoother navigation
+      requestAnimationFrame(() => {
         navigation.push('/it35-lab/app', 'forward', 'replace');
-      }, 300);
+      });
     } catch (error) {
-      console.log('2FA verification process error:', error);
+      console.error('2FA verification error:', error);
       setAlertMessage('An error occurred during 2FA verification: ' + (error as Error).message);
       setShowAlert(true);
       setIsLoading(false);
@@ -338,7 +418,22 @@ const Login: React.FC = () => {
       setLogoutReason(reason);
       localStorage.removeItem('logoutReason');
     }
+    if (localStorage.getItem('forceContactAdmin') === 'true') {
+      setShowContactAdminBtn(true);
+      setIsLocked(true);
+      setAlertMessage('Your account was logged out because it was accessed from another device. If this was not you, please contact the admin.');
+      setShowAlert(true);
+      localStorage.removeItem('forceContactAdmin');
+    }
   }, []);
+
+  // On logout, delete session from active_sessions
+  const handleLogoutSessionCleanup = async () => {
+    const deviceId = getDeviceId();
+    if (email && deviceId) {
+      await supabase.from('active_sessions').delete().eq('email', email.toLowerCase().trim()).eq('device_id', deviceId);
+    }
+  };
 
   return (
     <IonPage>

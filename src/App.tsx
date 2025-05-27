@@ -1,8 +1,9 @@
 import { Redirect, Route } from 'react-router-dom';
 import { IonApp, IonRouterOutlet, setupIonicReact } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from './utils/supabaseClient';
+import SessionWatcher from './components/SessionWatcher';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -43,10 +44,26 @@ import ChangePassword from './pages/ChangePassword';
 setupIonicReact();
 
 const App: React.FC = () => {
+  (window as any).userInitiatedLogout = false;
+
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        localStorage.setItem('logoutReason', 'You were logged out because your account was logged in on another device.');
+    // Get the current user session
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUserEmail(session?.user?.email ?? null);
+    };
+    getSession();
+
+    // Listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user?.email ?? null);
+      if (_event === 'SIGNED_OUT') {
+        if (!(window as any).userInitiatedLogout) {
+          localStorage.setItem('logoutReason', 'You were logged out because your account was logged in on another device.');
+          localStorage.setItem('forceContactAdmin', 'true');
+        }
         window.location.href = '/it35-lab';
       }
     });
@@ -57,6 +74,7 @@ const App: React.FC = () => {
 
   return (
     <IonApp>
+      <SessionWatcher email={userEmail} />
       <IonReactRouter>
         <IonRouterOutlet>
           <Route exact path="/it35-lab" component={Login} />
