@@ -32,7 +32,7 @@ const ChangePassword: React.FC = () => {
       setToastMessage('Password changed successfully! Redirecting to login...');
       setShowToast(true);
       setTimeout(() => {
-        navigation.push('/it35-lab', 'back', 'replace');
+        navigation.push('/it35-lab/', 'back', 'replace');
       }, 2000);
     }
   };

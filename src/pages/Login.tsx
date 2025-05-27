@@ -240,7 +240,7 @@ const Login: React.FC = () => {
           );
 
           // 5. Redirect to login
-          window.location.href = '/it35-lab';
+          window.location.href = '/it35-lab/';
           return;
         }
       }
@@ -511,7 +511,9 @@ const Login: React.FC = () => {
               LOGIN
             </button>
             <div className="register-link-modern">
-              <a href="/it35-lab/register">Don't have an account? <strong>Register</strong></a>
+              <IonButton fill="clear" routerLink="/it35-lab/register" routerDirection="forward" style={{ padding: 0, minHeight: 0, minWidth: 0, height: 'auto', fontSize: 'inherit', color: '#fff', textTransform: 'none' }}>
+                Don't have an account? <strong>Register</strong>
+              </IonButton>
             </div>
           </div>
         </div>

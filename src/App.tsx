@@ -1,5 +1,5 @@
 import { Redirect, Route } from 'react-router-dom';
-import { IonApp, IonRouterOutlet, setupIonicReact } from '@ionic/react';
+import { IonApp, IonRouterOutlet, setupIonicReact, useIonRouter } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { useEffect, useState } from 'react';
 import { supabase } from './utils/supabaseClient';
@@ -47,6 +47,7 @@ const App: React.FC = () => {
   (window as any).userInitiatedLogout = false;
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const navigation = useIonRouter();
 
   useEffect(() => {
     // Get the current user session
@@ -64,13 +65,13 @@ const App: React.FC = () => {
           localStorage.setItem('logoutReason', 'You were logged out because your account was logged in on another device.');
           localStorage.setItem('forceContactAdmin', 'true');
         }
-        window.location.href = '/it35-lab';
+        window.location.href = '/it35-lab/';
       }
     });
     return () => {
       listener?.subscription.unsubscribe();
     };
-  }, []);
+  }, [navigation]);
 
   return (
     <IonApp>

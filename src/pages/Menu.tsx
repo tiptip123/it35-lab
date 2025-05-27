@@ -46,7 +46,7 @@ import App from '../App'; // Import to access userInitiatedLogout
         if (!error) {
             setShowToast(true);
             setTimeout(() => {
-                navigation.push('/it35-lab', 'back', 'replace'); 
+                navigation.push('/it35-lab/', 'back', 'replace'); 
             }, 300); 
         } else {
             setErrorMessage(error.message);

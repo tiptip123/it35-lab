@@ -10,7 +10,11 @@ export default defineConfig({
     react(),
     legacy()
   ],
-  base:"it35-lab",
+  base: '/it35-lab/',
+  server: {
+    host: '0.0.0.0',
+    port: 5173
+  },
   test: {
     globals: true,
     environment: 'jsdom',

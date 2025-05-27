@@ -23,7 +23,7 @@ const SessionWatcher: React.FC<SessionWatcherProps> = ({ email }) => {
           'logoutReason',
           'Your account has been locked because it was accessed from another device. Please contact the admin.'
         );
-        window.location.href = '/it35-lab';
+        window.location.href = '/it35-lab/';
       }
     };
 

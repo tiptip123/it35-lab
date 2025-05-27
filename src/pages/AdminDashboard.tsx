@@ -159,7 +159,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleLogout = () => {
-    navigation.push('/it35-lab', 'back', 'replace');
+    navigation.push('/it35-lab/', 'back', 'replace');
   };
 
   const updateIncidentStatus = async (id: string, status: string) => {

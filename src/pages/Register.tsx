@@ -160,7 +160,10 @@ const Register: React.FC = () => {
                             CREATE ACCOUNT
                         </button>
                         <div className="register-link-modern">
-                            Already have an account? <a href="/it35-lab">SIGN IN</a>
+                            Already have an account? 
+                            <IonButton fill="clear" routerLink="/it35-lab" routerDirection="back" style={{ padding: 0, minHeight: 0, minWidth: 0, height: 'auto', fontSize: 'inherit', color: '#fff', textTransform: 'none' }}>
+                              SIGN IN
+                            </IonButton>
                         </div>
                     </div>
                 </div>
@@ -226,6 +229,8 @@ const Register: React.FC = () => {
                                 routerLink="/it35-lab" 
                                 routerDirection="back" 
                                 className="success-button"
+                                fill="clear"
+                                style={{ color: '#1976d2', fontWeight: 'bold', textTransform: 'none' }}
                             >
                                 Go to Login
                             </IonButton>
