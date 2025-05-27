@@ -108,14 +108,24 @@ const AdminDashboard: React.FC = () => {
     if (data) setUnlockRequests(data);
   };
 
-  const unlockUser = async (userId: string) => {
+  const unlockUser = async (userId: string, userEmail: string) => {
+    // Delete from locked_users
     const { error } = await supabase
       .from('locked_users')
       .delete()
       .eq('id', userId);
 
+    // Delete any pending unlock requests for this user
+    await supabase
+      .from('security_incidents')
+      .delete()
+      .eq('user_email', userEmail)
+      .eq('type', 'Unlock Request')
+      .eq('status', 'pending');
+
     if (!error) {
       fetchLockedUsers();
+      fetchUnlockRequests();
     }
   };
 
@@ -282,7 +292,7 @@ const AdminDashboard: React.FC = () => {
                         </IonLabel>
                         <IonButton
                           fill="clear"
-                          onClick={() => unlockUser(user.id)}
+                          onClick={() => unlockUser(user.id, user.email)}
                         >
                           <IonIcon icon={lockOpenOutline} slot="start" />
                           Unlock

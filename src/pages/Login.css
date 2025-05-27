@@ -235,4 +235,29 @@
 }
 .signin-link-modern a:hover {
   color: #4f7afe;
+}
+
+.login-error-message {
+  color: #e53935;
+  font-size: 0.98rem;
+  margin-bottom: 8px;
+  margin-top: -2px;
+  text-align: left;
+  width: 100%;
+}
+.login-input-error {
+  border-color: #e53935 !important;
+  background: rgba(229,57,53,0.08) !important;
+}
+
+.contact-admin-btn {
+  background: #1976d2 !important;
+  color: #fff !important;
+  font-weight: 600;
+  margin-top: 8px;
+  transition: background 0.2s;
+}
+.contact-admin-btn:hover, .contact-admin-btn:focus {
+  background: #1251a3 !important;
+  color: #fff !important;
 } 

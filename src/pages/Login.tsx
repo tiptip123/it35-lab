@@ -77,6 +77,8 @@ const Login: React.FC = () => {
 
   const [rememberMe, setRememberMe] = useState(false);
 
+  const [showContactAdminBtn, setShowContactAdminBtn] = useState(false);
+
   // Helper to fetch the user's TOTP factorId
   const fetchTOTPFactorId = async () => {
     const { data: factors } = await supabase.auth.mfa.listFactors();
@@ -133,7 +135,7 @@ const Login: React.FC = () => {
         {
           email,
           locked_at: new Date().toISOString(),
-          attempts: failedAttempts
+          attempts: failedAttempts + 1
         }
       ]);
 
@@ -163,6 +165,7 @@ const Login: React.FC = () => {
       setShowAlert(true);
       setIsLoading(false);
       setIsLocked(true);
+      setShowContactAdminBtn(true);
       return;
     }
 
@@ -181,6 +184,8 @@ const Login: React.FC = () => {
           await lockUserAccount();
           setAlertMessage('Account locked due to too many failed attempts. Please contact an administrator.');
           setShowAlert(true);
+          setIsLocked(true);
+          setShowContactAdminBtn(true);
         }
         setIsLoading(false);
         return;
@@ -345,20 +350,37 @@ const Login: React.FC = () => {
             </div>
             <h2 className="login-title-modern">Username</h2>
             <input
-              className="login-input-modern"
+              className={`login-input-modern${inputError ? ' login-input-error' : ''}`}
               type="email"
               placeholder="Username"
               value={email}
               onChange={e => setEmail(e.target.value)}
+              onFocus={() => setInputError(false)}
             />
             <h2 className="login-title-modern" style={{ marginTop: 18 }}>Password</h2>
             <input
-              className="login-input-modern"
+              className={`login-input-modern${inputError ? ' login-input-error' : ''}`}
               type="password"
               placeholder="Password"
               value={password}
               onChange={e => setPassword(e.target.value)}
+              onFocus={() => setInputError(false)}
             />
+            {inputError && !isLocked && (
+              <div className="login-error-message">Incorrect email or password. Please try again.</div>
+            )}
+            {isLocked && showContactAdminBtn && !requestSubmitted && (
+              <div style={{ marginTop: 16 }}>
+                <button className="login-btn-modern contact-admin-btn" onClick={handleUnlockRequest}>
+                  Contact Admin
+                </button>
+              </div>
+            )}
+            {requestSubmitted && (
+              <div style={{ marginTop: 16, color: 'green', textAlign: 'center' }}>
+                Request submitted, please check email for admin response
+              </div>
+            )}
             <div className="login-row-options">
               <label className="login-remember-label">
                 <input
@@ -413,7 +435,16 @@ const Login: React.FC = () => {
           userEmail={email}
         />
         {/* Alerts and Toasts remain as before */}
-        <AlertBox message={alertMessage} isOpen={showAlert} onClose={() => setShowAlert(false)} />
+        <IonAlert
+          isOpen={showAlert}
+          onDidDismiss={() => {
+            setShowAlert(false);
+            if (isLocked) setShowContactAdminBtn(true);
+          }}
+          header="Notification"
+          message={alertMessage}
+          buttons={['OK']}
+        />
         <IonToast
           isOpen={showToast}
           onDidDismiss={() => setShowToast(false)}
