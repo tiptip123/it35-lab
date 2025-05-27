@@ -575,12 +575,14 @@ const Login: React.FC = () => {
               <div style={{ textAlign: 'center', marginTop: 32 }}>
                 <h2>Two-Factor Authentication</h2>
                 <p>Preparing 2FA challenge...</p>
+                <IonButton expand="block" color="medium" onClick={() => { setShow2FAModal(false); setIs2FARequired(false); }}>Cancel</IonButton>
               </div>
             ) : twoFAError ? (
               <div style={{ color: 'red', textAlign: 'center', marginTop: 32 }}>
                 <h2>Two-Factor Authentication</h2>
                 <p>{twoFAError}</p>
                 <IonButton expand="block" onClick={() => { setShow2FAModal(false); setIs2FARequired(false); }}>Close</IonButton>
+                <IonButton expand="block" color="medium" onClick={() => { setShow2FAModal(false); setIs2FARequired(false); }}>Cancel</IonButton>
               </div>
             ) : (
               <div style={{ textAlign: 'center', marginTop: 32 }}>
@@ -595,6 +597,7 @@ const Login: React.FC = () => {
                 <IonButton expand="block" onClick={handle2FAVerify} disabled={isLoading || twoFACode.length !== 6}>
                   Verify
                 </IonButton>
+                <IonButton expand="block" color="medium" onClick={() => { setShow2FAModal(false); setIs2FARequired(false); }}>Cancel</IonButton>
               </div>
             )}
           </IonContent>
