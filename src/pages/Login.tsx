@@ -22,6 +22,8 @@ import {
 import { personCircleOutline } from 'ionicons/icons'; // Changed to a more professional user icon
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import IncidentReportModal from '../components/IncidentReportModal';
+import './Login.css';
 
 // Add Asset type
 interface Asset {
@@ -70,6 +72,10 @@ const Login: React.FC = () => {
   const [incidentDescription, setIncidentDescription] = useState('');
 
   const [logoutReason, setLogoutReason] = useState('');
+
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Helper to fetch the user's TOTP factorId
   const fetchTOTPFactorId = async () => {
@@ -308,6 +314,11 @@ const Login: React.FC = () => {
     setRequestSubmitted(true);
   };
 
+  const handleForgotPassword = () => {
+    setAlertMessage('Forgot password? Contact admin.');
+    setShowAlert(true);
+  };
+
   useEffect(() => {
     const fetchAssets = async () => {
       const { data } = await supabase.from('assets').select('*');
@@ -326,116 +337,83 @@ const Login: React.FC = () => {
 
   return (
     <IonPage>
-      <IonContent className="ion-padding" color="light">
-        <div className="login-container">
-          <div className="login-card">
-            <div className="logo-container">
-              <IonAvatar className="logo-avatar">
-                <IonIcon 
-                  icon={personCircleOutline}  // Changed to a more professional user icon
-                  className="logo-icon"
+      <IonContent className="login-gradient-bg" fullscreen>
+        <div className="login-center-container">
+          <div className="login-card-modern">
+            <div className="login-user-icon">
+              <IonIcon icon={personCircleOutline} style={{ fontSize: 90, color: '#fff' }} />
+            </div>
+            <h2 className="login-title-modern">Username</h2>
+            <input
+              className="login-input-modern"
+              type="email"
+              placeholder="Username"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
+            <h2 className="login-title-modern" style={{ marginTop: 18 }}>Password</h2>
+            <input
+              className="login-input-modern"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+            />
+            <div className="login-row-options">
+              <label className="login-remember-label">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
                 />
-              </IonAvatar>
+                Remember me
+              </label>
+              <button className="login-forgot-btn" type="button" onClick={handleForgotPassword}>
+                Forgot Password?
+              </button>
             </div>
-            
-            <h1 className="login-title">Welcome Back</h1>
-            <p className="login-subtitle">Please sign in to continue</p>
-            
-            <div className="form-group">
-              <IonInput
-                className="custom-input"
-                label="Email" 
-                labelPlacement="floating" 
-                fill="outline"
-                type="email"
-                placeholder="Enter Email"
-                value={email}
-                onIonChange={e => setEmail(e.detail.value!)}
-                style={{ '--color': '#000000', '--border-color': inputError ? 'red' : '#e2e8f0' }}
-              />
-            </div>
-            
-            <div className="form-group">
-              <IonInput
-                className="custom-input"
-                fill="outline"
-                type="password"
-                placeholder="Password"
-                value={password}
-                onIonChange={e => setPassword(e.detail.value!)}
-                style={{ '--color': '#000000', '--border-color': inputError ? 'red' : '#e2e8f0' }}
-              >
-                <IonInputPasswordToggle slot="end"></IonInputPasswordToggle>
-              </IonInput>
-            </div>
-            
-            <IonButton 
-              className="login-button"
+            <button
+              className="login-btn-modern"
+              type="button"
               onClick={handleLoginClick}
-              expand="block" 
-              shape="round"
               disabled={isLoading}
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
-            </IonButton>
-            
-            {isLocked && !requestSubmitted && (
-              <div style={{ marginTop: 16 }}>
-                <IonButton color="medium" expand="block" onClick={handleUnlockRequest}>
-                  Contact Admin
-                </IonButton>
-              </div>
-            )}
-            {requestSubmitted && (
-              <div style={{ marginTop: 16, color: 'green', textAlign: 'center' }}>
-                Request submitted, please check email for admin response
-              </div>
-            )}
-            
-            <div className="register-link">
-              <IonButton 
-                routerLink="/it35-lab/register" 
-                fill="clear" 
-                size="small"
-                className="register-button"
-              >
-                Don't have an account? <strong>Register</strong>
-              </IonButton>
+              LOGIN
+            </button>
+            <div className="register-link-modern">
+              <a href="/it35-lab/register">Don't have an account? <strong>Register</strong></a>
             </div>
           </div>
         </div>
-
-        {/* 2FA Modal (Custom) */}
-        <IonModal isOpen={show2FAModal} onDidDismiss={() => setShow2FAModal(false)} backdropDismiss={false}>
-          <div style={{ padding: 24, maxWidth: 400, margin: '40px auto', background: '#fff', borderRadius: 16, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', color: '#222' }}>
-            <h2 style={{ marginBottom: 8, color: '#222' }}>Two-Factor Authentication Required</h2>
-            <p style={{ marginBottom: 16, color: '#222' }}>Please enter the 6-digit code from your authenticator app.</p>
-            <input
-              type="text"
-              maxLength={6}
-              pattern="[0-9]*"
-              inputMode="numeric"
-              placeholder="Enter 2FA code"
-              value={twoFACode}
-              onChange={e => setTwoFACode(e.target.value.replace(/\D/g, ''))}
-              style={{ width: '100%', padding: 12, fontSize: 18, borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 16, textAlign: 'center', letterSpacing: 4, color: '#222', background: '#fff' }}
-              autoFocus
-            />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <IonButton onClick={handle2FAVerify} disabled={twoFACode.length !== 6 || isLoading} color="primary" shape="round">
-                {isLoading ? 'Verifying...' : 'Verify'}
-              </IonButton>
-              <IonButton onClick={() => setShow2FAModal(false)} color="medium" shape="round" fill="outline" disabled={isLoading}>
-                Cancel
-              </IonButton>
-            </div>
-          </div>
-        </IonModal>
-
-        {/* Reusable AlertBox Component */}
+        {/* Floating help button for incident report */}
+        <IonButton
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            zIndex: 1000,
+            borderRadius: '50%',
+            width: 48,
+            height: 48,
+            minWidth: 48,
+            minHeight: 48,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            background: '#fff',
+            color: '#1976d2',
+            fontWeight: 'bold',
+            fontSize: 24
+          }}
+          onClick={() => setShowIncidentModal(true)}
+        >
+          ?
+        </IonButton>
+        <IncidentReportModal
+          isOpen={showIncidentModal}
+          onClose={() => setShowIncidentModal(false)}
+          userEmail={email}
+        />
+        {/* Alerts and Toasts remain as before */}
         <AlertBox message={alertMessage} isOpen={showAlert} onClose={() => setShowAlert(false)} />
-
-        {/* IonToast for success message */}
         <IonToast
           isOpen={showToast}
           onDidDismiss={() => setShowToast(false)}
@@ -444,8 +422,6 @@ const Login: React.FC = () => {
           position="top"
           color="primary"
         />
-
-        {/* IonToast for logout reason */}
         <IonToast
           isOpen={!!logoutReason}
           onDidDismiss={() => setLogoutReason('')}
@@ -454,41 +430,6 @@ const Login: React.FC = () => {
           position="top"
           color="danger"
         />
-
-        {/* Incident Reporting Form UI */}
-        <IonCard style={{ marginTop: 24 }}>
-          <IonCardHeader>
-            <IonCardTitle>Report Security Incident</IonCardTitle>
-          </IonCardHeader>
-          <IonCardContent>
-            <IonLabel position="stacked">Incident Type</IonLabel>
-            <IonSelect value={incidentType} onIonChange={e => setIncidentType(e.detail.value)}>
-              <IonSelectOption value="Phishing">Phishing</IonSelectOption>
-              <IonSelectOption value="Data Breach">Data Breach</IonSelectOption>
-              <IonSelectOption value="Unauthorized Access">Unauthorized Access</IonSelectOption>
-              <IonSelectOption value="Malware">Malware</IonSelectOption>
-              <IonSelectOption value="Other">Other</IonSelectOption>
-            </IonSelect>
-            <IonLabel position="stacked" style={{ marginTop: 16 }}>Impact Level</IonLabel>
-            <IonSelect value={impactLevel} onIonChange={e => setImpactLevel(e.detail.value)}>
-              <IonSelectOption value="Low">Low</IonSelectOption>
-              <IonSelectOption value="Medium">Medium</IonSelectOption>
-              <IonSelectOption value="High">High</IonSelectOption>
-              <IonSelectOption value="Critical">Critical</IonSelectOption>
-            </IonSelect>
-            <IonLabel position="stacked" style={{ marginTop: 16 }}>Affected Asset</IonLabel>
-            <IonSelect value={asset} onIonChange={e => setAsset(e.detail.value)}>
-              {assets.map(a => (
-                <IonSelectOption key={a.id} value={a.name}>{a.name}</IonSelectOption>
-              ))}
-            </IonSelect>
-            <IonLabel position="stacked" style={{ marginTop: 16 }}>Description</IonLabel>
-            <IonTextarea value={incidentDescription} onIonChange={e => setIncidentDescription(e.detail.value!)} />
-            <IonButton expand="block" style={{ marginTop: 24 }} onClick={reportIncident} disabled={isLoading}>
-              Report Incident
-            </IonButton>
-          </IonCardContent>
-        </IonCard>
       </IonContent>
     </IonPage>
   );

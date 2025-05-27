@@ -100,137 +100,67 @@ const Register: React.FC = () => {
     
     return (
         <IonPage>
-            <IonContent className="ion-padding" color="light">
-                <div className="register-container">
-                    <div className="register-card">
-                        <div className="header-section">
-                            <IonButton 
-                                fill="clear" 
-                                routerLink="/it35-lab" 
-                                className="back-button"
-                            >
-                                <IonIcon icon={arrowBack} slot="start" />
-                                Back
-                            </IonButton>
-                            <div className="logo-container">
-                                <IonIcon 
-                                    icon={personCircleOutline}
-                                    className="logo-icon"
-                                />
-                            </div>
-                            <h1 className="register-title">Create Account</h1>
-                            <p className="register-subtitle">Fill in your details to get started</p>
+            <IonContent className="login-gradient-bg" fullscreen>
+                <div className="login-center-container">
+                    <div className="login-card-modern">
+                        <div className="login-user-icon">
+                            <IonIcon icon={personCircleOutline} style={{ fontSize: 90, color: '#fff' }} />
                         </div>
-
-                        <div className="form-group">
-                            <IonInput
-                                className="custom-input"
-                                label="Username" 
-                                labelPlacement="floating"
-                                fill="outline"
+                        <h2 className="login-title-modern">Create Account</h2>
+                        <input
+                            className="login-input-modern"
+                            type="text"
+                            placeholder="Username"
+                            value={username}
+                            onChange={e => setUsername(e.target.value)}
+                        />
+                        <div className="register-name-row">
+                            <input
+                                className="login-input-modern half-width"
                                 type="text"
-                                placeholder="Enter a unique username"
-                                value={username}
-                                onIonChange={e => setUsername(e.detail.value!)}
-                                style={{ '--color': '#000000' }}
+                                placeholder="First Name"
+                                value={firstName}
+                                onChange={e => setFirstName(e.target.value)}
+                            />
+                            <input
+                                className="login-input-modern half-width"
+                                type="text"
+                                placeholder="Last Name"
+                                value={lastName}
+                                onChange={e => setLastName(e.target.value)}
                             />
                         </div>
-
-                        <div className="name-fields">
-                            <div className="form-group half-width">
-                                <IonInput
-                                    className="custom-input"
-                                    label="First Name"
-                                    labelPlacement="floating"
-                                    fill="outline"
-                                    type="text"
-                                    placeholder="Enter first name"
-                                    value={firstName}
-                                    onIonChange={e => setFirstName(e.detail.value!)}
-                                    style={{ '--color': '#000000' }}
-                                />
-                            </div>
-                            <div className="form-group half-width">
-                                <IonInput
-                                    className="custom-input"
-                                    label="Last Name"
-                                    labelPlacement="floating"
-                                    fill="outline"
-                                    type="text"
-                                    placeholder="Enter last name"
-                                    value={lastName}
-                                    onIonChange={e => setLastName(e.detail.value!)}
-                                    style={{ '--color': '#000000' }}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="form-group">
-                            <IonInput
-                                className="custom-input"
-                                label="Email"
-                                labelPlacement="floating"
-                                fill="outline"
-                                type="email"
-                                placeholder="youremail@nbsc.edu.ph"
-                                value={email}
-                                onIonChange={e => setEmail(e.detail.value!)}
-                                style={{ '--color': '#000000' }}
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <IonInput
-                                className="custom-input"
-                                label="Password"
-                                labelPlacement="floating"
-                                fill="outline"
-                                type="password"
-                                placeholder="Enter password"
-                                value={password}
-                                onIonChange={e => setPassword(e.detail.value!)}
-                                style={{ '--color': '#000000' }}
-                            >
-                                <IonInputPasswordToggle slot="end" />
-                            </IonInput>
-                        </div>
-
-                        <div className="form-group">
-                            <IonInput
-                                className="custom-input"
-                                label="Confirm Password"
-                                labelPlacement="floating"
-                                fill="outline"
-                                type="password"
-                                placeholder="Confirm password"
-                                value={confirmPassword}
-                                onIonChange={e => setConfirmPassword(e.detail.value!)}
-                                style={{ '--color': '#000000' }}
-                            >
-                                <IonInputPasswordToggle slot="end" />
-                            </IonInput>
-                        </div>
-
-                        <IonButton 
-                            className="register-button"
+                        <input
+                            className="login-input-modern"
+                            type="email"
+                            placeholder="Email"
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                        />
+                        <input
+                            className="login-input-modern"
+                            type="password"
+                            placeholder="Password"
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                        />
+                        <input
+                            className="login-input-modern"
+                            type="password"
+                            placeholder="Confirm Password"
+                            value={confirmPassword}
+                            onChange={e => setConfirmPassword(e.target.value)}
+                        />
+                        <button
+                            className="login-btn-modern"
+                            type="button"
                             onClick={handleOpenVerificationModal}
-                            expand="block"
-                            shape="round"
                             disabled={isLoading}
                         >
-                            {isLoading ? 'Creating Account...' : 'Create Account'}
-                        </IonButton>
-
-                        <div className="login-link">
-                            <IonText>Already have an account?</IonText>
-                            <IonButton 
-                                routerLink="/it35-lab" 
-                                fill="clear" 
-                                size="small"
-                                className="login-button"
-                            >
-                                Sign In
-                            </IonButton>
+                            CREATE ACCOUNT
+                        </button>
+                        <div className="register-link-modern">
+                            Already have an account? <a href="/it35-lab">SIGN IN</a>
                         </div>
                     </div>
                 </div>
@@ -306,208 +236,6 @@ const Register: React.FC = () => {
                 {/* Reusable AlertBox Component */}
                 <AlertBox message={alertMessage} isOpen={showAlert} onClose={() => setShowAlert(false)} />
             </IonContent>
-
-            <style>{`
-                .register-container {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 80vh;
-                    padding: 20px;
-                }
-                
-                .register-card {
-                    width: 100%;
-                    max-width: 500px;
-                    background: white;
-                    border-radius: 16px;
-                    padding: 32px;
-                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-                }
-                
-                .header-section {
-                    text-align: center;
-                    margin-bottom: 24px;
-                }
-                
-                .back-button {
-                    --color: #5e72e4;
-                    margin-bottom: 16px;
-                    align-self: flex-start;
-                }
-                
-                .logo-container {
-                    display: flex;
-                    justify-content: center;
-                    margin-bottom: 16px;
-                }
-                
-                .logo-icon {
-                    font-size: 64px;
-                    color: #5e72e4;
-                }
-                
-                .register-title {
-                    color: #2d3748;
-                    margin-bottom: 8px;
-                    font-size: 24px;
-                    font-weight: 600;
-                }
-                
-                .register-subtitle {
-                    color: #718096;
-                    margin-bottom: 24px;
-                    font-size: 14px;
-                }
-                
-                .form-group {
-                    margin-bottom: 16px;
-                }
-                
-                .name-fields {
-                    display: flex;
-                    gap: 16px;
-                }
-                
-                .half-width {
-                    flex: 1;
-                }
-                
-                .custom-input {
-                    --border-radius: 8px;
-                    --border-color: #e2e8f0;
-                    --highlight-color-focused: #5e72e4;
-                    --color: #000000;
-                }
-                
-                .register-button {
-                    --background: #5e72e4;
-                    --background-activated: #4a5acf;
-                    --background-focused: #4a5acf;
-                    --background-hover: #4a5acf;
-                    margin-top: 24px;
-                    height: 48px;
-                    font-weight: 600;
-                     --color: #000000; 
-                }
-                
-                .login-link {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    margin-top: 16px;
-                    gap: 4px;
-                    color: #000000;
-                }
-                
-                .login-button {
-                    --color: #000000;
-                    font-size: 14px;
-                }
-                
-                /* Verification Modal Styles */
-                .modal-container {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100%;
-                    padding: 20px;
-                }
-                
-                .verification-card {
-                    width: 100%;
-                    max-width: 500px;
-                    border-radius: 16px;
-                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-                }
-                
-                .verification-title {
-                    font-size: 20px;
-                    font-weight: 600;
-                    color: #2d3748;
-                }
-                
-                .verification-subtitle {
-                    color: #718096;
-                    font-size: 14px;
-                }
-                
-                .verification-content {
-                    padding: 16px;
-                }
-                
-                .detail-item {
-                    margin-bottom: 16px;
-                }
-                
-                .detail-label {
-                    display: block;
-                    color: #718096;
-                    font-size: 14px;
-                    margin-bottom: 4px;
-                }
-                
-                .detail-value {
-                    display: block;
-                    color: #2d3748;
-                    font-size: 16px;
-                    font-weight: 500;
-                }
-                
-                .modal-actions {
-                    display: flex;
-                    justify-content: flex-end;
-                    padding: 16px;
-                    gap: 8px;
-                }
-                
-                .cancel-button {
-                    --color: #718096;
-                }
-                
-                .confirm-button {
-                    --background: #5e72e4;
-                }
-                
-                /* Success Modal Styles */
-                .success-modal {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    text-align: center;
-                    height: 100%;
-                    padding: 32px;
-                }
-                
-                .success-icon {
-                    font-size: 64px;
-                    margin-bottom: 24px;
-                }
-                
-                .success-title {
-                    color: #2d3748;
-                    font-size: 24px;
-                    font-weight: 600;
-                    margin-bottom: 16px;
-                }
-                
-                .success-message {
-                    color: #718096;
-                    margin-bottom: 32px;
-                }
-                
-                .success-message p {
-                    margin: 8px 0;
-                }
-                
-                .success-button {
-                    --background: #5e72e4;
-                    width: 100%;
-                    max-width: 200px;
-                }
-            `}</style>
         </IonPage>
     );
 };

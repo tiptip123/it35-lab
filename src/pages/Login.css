@@ -1,0 +1,238 @@
+/* Blue gradient background */
+.login-gradient-bg {
+  --background: none;
+  background: linear-gradient(180deg, #4facfe 0%, #00f2fe 100%) !important;
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Center the login card */
+.login-center-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.login-card-modern {
+  background: rgba(255,255,255,0.10);
+  border-radius: 24px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+  padding: 40px 32px 32px 32px;
+  min-width: 340px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-user-icon {
+  margin-bottom: 24px;
+}
+
+.login-title-modern {
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  align-self: flex-start;
+}
+
+.login-input-modern {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #fff;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font-size: 1rem;
+  margin-bottom: 8px;
+  outline: none;
+  transition: border 0.2s;
+}
+.login-input-modern:focus {
+  border: 2px solid #1976d2;
+  background: rgba(255,255,255,0.15);
+}
+
+.login-row-options {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 0 18px 0;
+}
+
+.login-remember-label {
+  color: #fff;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.login-forgot-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 0.95rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.login-btn-modern {
+  width: 100%;
+  padding: 12px 0;
+  border: 2px solid #fff;
+  border-radius: 24px;
+  background: transparent;
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-top: 18px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.login-btn-modern:hover, .login-btn-modern:focus {
+  background: #fff;
+  color: #1976d2;
+}
+
+/* Floating help icon (incident report) */
+.ion-button[style*='position: fixed'] {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;
+}
+
+.register-link-modern {
+  width: 100%;
+  text-align: center;
+  margin-top: 18px;
+}
+.register-link-modern a {
+  color: #fff;
+  font-size: 1rem;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+.register-link-modern a:hover {
+  color: #1976d2;
+}
+
+/* Register page styles */
+.register-gradient-bg {
+  --background: none;
+  background: #fff !important;
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.register-center-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.register-card-modern {
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.10);
+  padding: 40px 32px 32px 32px;
+  min-width: 340px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.register-user-icon {
+  margin-bottom: 18px;
+}
+
+.register-title-modern {
+  color: #222;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.register-subtitle-modern {
+  color: #888;
+  font-size: 1rem;
+  margin-bottom: 18px;
+  text-align: center;
+}
+
+.register-input-modern {
+  width: 100%;
+  padding: 10px 14px;
+  border: 2px solid #222;
+  border-radius: 8px;
+  background: transparent;
+  color: #222;
+  font-size: 1rem;
+  margin-bottom: 12px;
+  outline: none;
+  transition: border 0.2s;
+}
+.register-input-modern:focus {
+  border: 2px solid #1976d2;
+  background: #f0f7ff;
+}
+
+.register-name-row {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.half-width {
+  width: 50%;
+}
+
+.register-btn-modern {
+  width: 100%;
+  padding: 12px 0;
+  border: none;
+  border-radius: 24px;
+  background: #4f7afe;
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin-top: 18px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(31, 38, 135, 0.10);
+  transition: background 0.2s, color 0.2s;
+}
+.register-btn-modern:hover, .register-btn-modern:focus {
+  background: #1976d2;
+  color: #fff;
+}
+
+.signin-link-modern {
+  width: 100%;
+  text-align: center;
+  margin-top: 10px;
+  color: #222;
+  font-size: 1rem;
+}
+.signin-link-modern a {
+  color: #1976d2;
+  font-weight: 600;
+  text-decoration: underline;
+  margin-left: 4px;
+}
+.signin-link-modern a:hover {
+  color: #4f7afe;
+} 

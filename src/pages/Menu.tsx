@@ -39,6 +39,7 @@ import EditProfile from './editProfile';
         {name:'Profile', url: '/it35-lab/app/profile', icon: settingsOutline},
     ]
     const handleLogout = async () => {
+        localStorage.setItem('logoutReason', 'You have been logged out successfully.');
         const { error } = await supabase.auth.signOut();
         if (!error) {
             setShowToast(true);
