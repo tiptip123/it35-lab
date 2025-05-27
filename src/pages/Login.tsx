@@ -8,7 +8,8 @@ import {
   IonInputPasswordToggle,  
   IonPage,  
   IonToast,  
-  useIonRouter
+  useIonRouter,
+  IonModal
 } from '@ionic/react';
 import { personCircleOutline } from 'ionicons/icons'; // Changed to a more professional user icon
 import { useState, useEffect, useRef } from 'react';
@@ -121,6 +122,8 @@ const Login: React.FC = () => {
     setChallengeId('');
     setFactorId('');
 
+    console.log('Starting login process...');
+
     // Check if user is locked
     const { data: lockedUser } = await supabase
       .from('locked_users')
@@ -137,65 +140,136 @@ const Login: React.FC = () => {
     }
 
     setIsLocked(false);
-    // Normal user login
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setFailedAttempts(prev => prev + 1);
-      setInputError(true);
-      if (failedAttempts + 1 >= 5) {
-        await lockUserAccount();
-        setAlertMessage('Account locked due to too many failed attempts. Please contact an administrator.');
-        setShowAlert(true);
+    try {
+      // First attempt login
+      console.log('Attempting login...');
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        console.log('Login error:', error);
+        setFailedAttempts(prev => prev + 1);
+        setInputError(true);
+        if (failedAttempts + 1 >= 5) {
+          await lockUserAccount();
+          setAlertMessage('Account locked due to too many failed attempts. Please contact an administrator.');
+          setShowAlert(true);
+        }
+        setIsLoading(false);
+        return;
       }
+
+      console.log('Login successful, checking for 2FA...');
+
+      // Reset failed attempts and error state on successful login
+      setFailedAttempts(0);
+      setInputError(false);
+
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Current session:', session);
+
+      if (session) {
+        // Check for 2FA factors
+        const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
+        console.log('2FA factors:', factors);
+        console.log('Factors error:', factorsError);
+
+        if (factorsError) {
+          console.log('Error getting factors:', factorsError);
+          setAlertMessage('Error checking 2FA status: ' + factorsError.message);
+          setShowAlert(true);
+          setIsLoading(false);
+          return;
+        }
+
+        if (factors && factors.totp && factors.totp.length > 0) {
+          console.log('2FA is enabled, starting challenge...');
+          const totpFactor = factors.totp[0];
+          
+          // Start 2FA challenge
+          const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
+            factorId: totpFactor.id
+          });
+
+          console.log('Challenge data:', challengeData);
+          console.log('Challenge error:', challengeError);
+
+          if (challengeError) {
+            console.log('Challenge error:', challengeError);
+            setAlertMessage('Failed to start 2FA challenge: ' + challengeError.message);
+            setShowAlert(true);
+            setIsLoading(false);
+            return;
+          }
+
+          if (challengeData) {
+            console.log('Showing 2FA modal...');
+            setChallengeId(challengeData.id);
+            setFactorId(totpFactor.id);
+            setShow2FAModal(true);
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          console.log('No 2FA factors found');
+        }
+      }
+
+      // If no 2FA required or verification successful
+      console.log('Proceeding without 2FA...');
+      setShowToast(true);
       setIsLoading(false);
-      return;
-    }
-
-    // Reset failed attempts and error state on successful login
-    setFailedAttempts(0);
-    setInputError(false);
-
-    // Step 2: Check if MFA challenge is required
-    if (data && 'mfa' in data && (data as any).mfa) {
-      const mfaData = (data as any).mfa;
-      setChallengeId(mfaData.id);
-      // Get the user's TOTP factorId
-      const fetchedFactorId = await fetchTOTPFactorId();
-      setFactorId(fetchedFactorId);
-      setShow2FAModal(true);
+      setTimeout(() => {
+        navigation.push('/it35-lab/app', 'forward', 'replace');
+      }, 300);
+    } catch (error) {
+      console.log('Login process error:', error);
+      setAlertMessage('An error occurred during login: ' + (error as Error).message);
+      setShowAlert(true);
       setIsLoading(false);
-      return;
     }
-
-    // Step 3: Success, no 2FA required
-    setShowToast(true);
-    setIsLoading(false);
-    setTimeout(() => {
-      navigation.push('/it35-lab/app', 'forward', 'replace');
-    }, 300);
   };
 
   // 2FA verification handler
   const handle2FAVerify = async () => {
-    setIsLoading(true);
-    const { error } = await supabase.auth.mfa.verify({
-      factorId,
-      challengeId,
-      code: twoFACode
-    });
-    if (error) {
-      setAlertMessage(error.message);
+    console.log('Starting 2FA verification...');
+    if (!twoFACode || twoFACode.length !== 6) {
+      setAlertMessage('Please enter a valid 6-digit code');
       setShowAlert(true);
-      setIsLoading(false);
       return;
     }
-    setShow2FAModal(false);
-    setShowToast(true);
-    setIsLoading(false);
-    setTimeout(() => {
-      navigation.push('/it35-lab/app', 'forward', 'replace');
-    }, 300);
+
+    setIsLoading(true);
+    try {
+      console.log('Verifying 2FA code...');
+      const { error } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId,
+        code: twoFACode
+      });
+
+      if (error) {
+        console.log('2FA verification error:', error);
+        setAlertMessage(error.message);
+        setShowAlert(true);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('2FA verification successful');
+      setShow2FAModal(false);
+      setShowToast(true);
+      setIsLoading(false);
+      setTimeout(() => {
+        navigation.push('/it35-lab/app', 'forward', 'replace');
+      }, 300);
+    } catch (error) {
+      console.log('2FA verification process error:', error);
+      setAlertMessage('An error occurred during 2FA verification: ' + (error as Error).message);
+      setShowAlert(true);
+      setIsLoading(false);
+    }
   };
 
   const handleUnlockRequest = async () => {
@@ -292,36 +366,32 @@ const Login: React.FC = () => {
           </div>
         </div>
 
-        {/* 2FA Modal */}
-        <IonAlert
-          isOpen={show2FAModal}
-          onDidDismiss={() => setShow2FAModal(false)}
-          header="Two-Factor Authentication Required"
-          message={
-            `<div>Please enter the 6-digit code from your authenticator app.</div>` +
-            `<input id='totp-input' type='number' placeholder='Enter 2FA code' style='width: 100%; margin-top: 10px; padding: 8px;' />`
-          }
-          buttons={[
-            {
-              text: 'Verify',
-              handler: async () => {
-                // Get the value from the input
-                const input = document.getElementById('totp-input') as HTMLInputElement;
-                setTwoFACode(input.value);
-                // Wait for state to update, then call verify
-                setTimeout(handle2FAVerify, 100);
-                return false;
-              }
-            },
-            {
-              text: 'Cancel',
-              role: 'cancel',
-              handler: () => setShow2FAModal(false)
-            }
-          ]}
-          // Prevent closing by clicking outside
-          backdropDismiss={false}
-        />
+        {/* 2FA Modal (Custom) */}
+        <IonModal isOpen={show2FAModal} onDidDismiss={() => setShow2FAModal(false)} backdropDismiss={false}>
+          <div style={{ padding: 24, maxWidth: 400, margin: '40px auto', background: '#fff', borderRadius: 16, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', color: '#222' }}>
+            <h2 style={{ marginBottom: 8, color: '#222' }}>Two-Factor Authentication Required</h2>
+            <p style={{ marginBottom: 16, color: '#222' }}>Please enter the 6-digit code from your authenticator app.</p>
+            <input
+              type="text"
+              maxLength={6}
+              pattern="[0-9]*"
+              inputMode="numeric"
+              placeholder="Enter 2FA code"
+              value={twoFACode}
+              onChange={e => setTwoFACode(e.target.value.replace(/\D/g, ''))}
+              style={{ width: '100%', padding: 12, fontSize: 18, borderRadius: 8, border: '1px solid #e2e8f0', marginBottom: 16, textAlign: 'center', letterSpacing: 4, color: '#222', background: '#fff' }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <IonButton onClick={handle2FAVerify} disabled={twoFACode.length !== 6 || isLoading} color="primary" shape="round">
+                {isLoading ? 'Verifying...' : 'Verify'}
+              </IonButton>
+              <IonButton onClick={() => setShow2FAModal(false)} color="medium" shape="round" fill="outline" disabled={isLoading}>
+                Cancel
+              </IonButton>
+            </div>
+          </div>
+        </IonModal>
 
         {/* Reusable AlertBox Component */}
         <AlertBox message={alertMessage} isOpen={showAlert} onClose={() => setShowAlert(false)} />
