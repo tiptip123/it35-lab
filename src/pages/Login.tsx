@@ -93,6 +93,9 @@ const Login: React.FC = () => {
   const [twoFACode, setTwoFACode] = useState('');
   const [challengeId, setChallengeId] = useState('');
   const [factorId, setFactorId] = useState('');
+  const [is2FARequired, setIs2FARequired] = useState(false);
+  const [twoFALoading, setTwoFALoading] = useState(false);
+  const [twoFAError, setTwoFAError] = useState('');
 
   const [isLocked, setIsLocked] = useState(false);
   const [requestSubmitted, setRequestSubmitted] = useState(false);
@@ -189,6 +192,9 @@ const Login: React.FC = () => {
   const doLogin = async () => {
     setIsLoading(true);
     setShow2FAModal(false);
+    setIs2FARequired(false);
+    setTwoFALoading(false);
+    setTwoFAError('');
     setTwoFACode('');
     setChallengeId('');
     setFactorId('');
@@ -309,19 +315,26 @@ const Login: React.FC = () => {
         const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
         
         if (factorsError) {
-          throw new Error('Error checking 2FA status: ' + factorsError.message);
+          setAlertMessage('Error checking 2FA status: ' + factorsError.message);
+          setShowAlert(true);
+          setIsLoading(false);
+          return;
         }
 
         if (factors && factors.totp && factors.totp.length > 0) {
+          setIs2FARequired(true);
+          setTwoFALoading(true);
           const totpFactor = factors.totp[0];
           const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({
             factorId: totpFactor.id
           });
-
+          setTwoFALoading(false);
           if (challengeError) {
-            throw new Error('Failed to start 2FA challenge: ' + challengeError.message);
+            setTwoFAError('Failed to start 2FA challenge: ' + challengeError.message);
+            setShow2FAModal(true);
+            setIsLoading(false);
+            return;
           }
-
           if (challengeData) {
             setChallengeId(challengeData.id);
             setFactorId(totpFactor.id);
@@ -556,6 +569,36 @@ const Login: React.FC = () => {
           position="top"
           color="danger"
         />
+        <IonModal isOpen={show2FAModal || is2FARequired} backdropDismiss={false}>
+          <IonContent className="ion-padding">
+            {twoFALoading ? (
+              <div style={{ textAlign: 'center', marginTop: 32 }}>
+                <h2>Two-Factor Authentication</h2>
+                <p>Preparing 2FA challenge...</p>
+              </div>
+            ) : twoFAError ? (
+              <div style={{ color: 'red', textAlign: 'center', marginTop: 32 }}>
+                <h2>Two-Factor Authentication</h2>
+                <p>{twoFAError}</p>
+                <IonButton expand="block" onClick={() => { setShow2FAModal(false); setIs2FARequired(false); }}>Close</IonButton>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', marginTop: 32 }}>
+                <h2>Enter your 2FA code</h2>
+                <IonInput
+                  value={twoFACode}
+                  onIonChange={e => setTwoFACode(e.detail.value!)}
+                  placeholder="6-digit code"
+                  type="number"
+                  style={{ margin: '16px 0' }}
+                />
+                <IonButton expand="block" onClick={handle2FAVerify} disabled={isLoading || twoFACode.length !== 6}>
+                  Verify
+                </IonButton>
+              </div>
+            )}
+          </IonContent>
+        </IonModal>
       </IonContent>
     </IonPage>
   );
